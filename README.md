@@ -1,13 +1,18 @@
 # taixia-pa — ESPHome TaiSEIA 元件 (Panasonic 客製版)
 
-> Fork 自 [tsunglung/taixia](https://github.com/tsunglung/taixia)。原作者
-> 已完成 TaiSEIA 101 (CNS 16014) 協定核心、多廠牌支援、HomeAssistant
-> 整合等基礎建設，感謝原作者貢獻。
->
-> 本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 慣例 (詳見下方)。
->
-> Python component 名稱**仍為 `taixia`**，原本 YAML 只需要改
-> `external_components` 的 `source` 即可切到此版本。
+Fork 自 [tsunglung/taixia](https://github.com/tsunglung/taixia)。原作者
+已完成 TaiSEIA 101 (CNS 16014) 協定核心、多廠牌支援、HomeAssistant
+整合等基礎建設，感謝原作者貢獻。
+
+本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 慣例 (詳見下方)。
+
+Python component 名稱**仍為 `taixia`**，原本 YAML 只需要改 `external_components` 的 `source` 即可切到此版本。
+
+---
+
+## 修改後在HA的內容:
+
+<img src="pictures/pa-controls.png" width="70%" />
 
 ---
 
@@ -42,16 +47,6 @@
   → 葉片位置請用新的 `select.swing_vertical_level` /
   `select.swing_horizontal_level` 控制。
 - **`select.motion_detect` (H'19) 跟葉片連動** — 詳見下節。
-
-### Debug 輔助
-- 每筆 `taixia.climate` polling 回應的 hex dump + 各 H'XX 服務碼解析在
-  DEBUG level 印出。預設關閉，需要時 YAML 開啟：
-  ```yaml
-  logger:
-    level: INFO
-    logs:
-      taixia.climate: DEBUG
-  ```
 
 ---
 
