@@ -15,6 +15,7 @@ from .. import (
     CONF_AIRPURIFIER,
     CONF_ELECTRIC_FAN,
     CONF_DEHUMIDIFIER,
+    CONF_ERV,
     CONF_SUPPORTED_SA
 )
 
@@ -25,8 +26,8 @@ ICON_TOGGLE_SWITCH = "mdi:toggle-switch-variant"
 CONF_IONS = "ions"
 CONF_SLEEPY = "sleepy"
 CONF_AIR_PURIFIER = "air_purifier"
-CONF_AIR_FLOW_HORIZONTAL = "air_flow_horizontal"
-CONF_AIR_FLOW_VERTICAL = "air_flow_vertical"
+CONF_SWING_VERTICAL = "swing_vertical"
+CONF_SWING_HORIZONTAL = "swing_horizontal"
 CONF_AIR_FLOW_AUTO = "air_flow_auto"
 CONF_FILTER_NOTIFY = "filter_notify"
 CONF_AIR_DETECT = "air_detect"
@@ -47,14 +48,14 @@ ICONS = {
     CONF_IONS: "mdi:atom-variant",
     CONF_SLEEPY: "mdi:power-sleep",
     CONF_AIR_PURIFIER: "mdi:air-purifier",
-    CONF_AIR_FLOW_HORIZONTAL: "mdi:waves",
-    CONF_AIR_FLOW_VERTICAL: "mdi:heat-wave",
+    CONF_SWING_VERTICAL: "mdi:arrow-expand-vertical",
+    CONF_SWING_HORIZONTAL: "mdi:arrow-expand-horizontal",
     CONF_AIR_FLOW_AUTO: "mdi:waves",
     CONF_FILTER_NOTIFY: "mdi:air-filter",
     CONF_AIR_DETECT: "mdi:hvac",
     CONF_MILDEW_PROOF: "mdi:weather-dust",
     CONF_SUPER_MODE: "mdi:lightning-bolt",
-    CONF_POWER_SAVING: "mdi:flash",
+    CONF_POWER_SAVING: "mdi:leaf",
     CONF_BEEPER: "mdi:volume-high",
     CONF_HUMIDITY_NOTIFY: "mdi:water-percent",
     CONF_LOCK: "mdi:lock",
@@ -67,8 +68,8 @@ ICONS = {
 CLIMATE_TYPES = {
     CONF_SLEEPY: 0x05,
     CONF_AIR_PURIFIER: 0x08,
-    CONF_AIR_FLOW_VERTICAL: 0x0E,
-    CONF_AIR_FLOW_HORIZONTAL: 0x10,
+    CONF_SWING_VERTICAL: 0x0E,
+    CONF_SWING_HORIZONTAL: 0x10,
     CONF_FILTER_NOTIFY: 0x12,
     CONF_AIR_DETECT: 0x16,
     CONF_MILDEW_PROOF: 0x17,
@@ -77,7 +78,7 @@ CLIMATE_TYPES = {
     CONF_POWER_SAVING: 0x1B,
     CONF_BEEPER: 0x1E,
     CONF_MOISTURIZE: 0x20,
-    CONF_FROST_WASH: 0x3B
+    CONF_FROST_WASH: 0x39
 }
 
 DEHUMIDIFIER_TYPES = {
@@ -90,12 +91,17 @@ DEHUMIDIFIER_TYPES = {
     CONF_LOCK: 0x16,
     CONF_BEEPER: 0x18,
     CONF_PM25_DETECT: 0x29,
+    CONF_FROST_WASH: 0x2A,
     CONF_FILTER_RESET: 0x52
 }
 
 AIRPURIFIER_TYPES = {
     CONF_IONS: 0x07,
     CONF_LOCK: 0x08
+}
+
+ERV_TYPES = {
+    CONF_FILTER_RESET: 0x14
 }
 
 FAN_TYPES = {
@@ -159,6 +165,11 @@ async def to_code(config):
     if config[CONF_TYPE] == CONF_AIRPURIFIER:
         sa_id = 8
         for sa_type, service_id in AIRPURIFIER_TYPES.items():
+            await add_switch(config, sa_type, service_id, sa_id)
+
+    if config[CONF_TYPE] == CONF_ERV:
+        sa_id = 14
+        for sa_type, service_id in ERV_TYPES.items():
             await add_switch(config, sa_type, service_id, sa_id)
 
     if config[CONF_TYPE] == CONF_ELECTRIC_FAN:

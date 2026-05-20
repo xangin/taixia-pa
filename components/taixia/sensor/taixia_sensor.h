@@ -20,7 +20,8 @@ class AirConditionerSensor : public TaiXiaListener, public PollingComponent {
   void set_energy_consumption_sensor(sensor::Sensor *sensor) { this->energy_consumption_sensor_ = sensor; }
   void set_operating_hours_sensor(sensor::Sensor *sensor) { this->operating_hours_sensor_ = sensor; }
   void set_error_code_sensor(sensor::Sensor *sensor) { this->error_code_sensor_ = sensor; }
-  void set_filiter_clean_sensor(sensor::Sensor *sensor) { this->filiter_clean_hours_sensor_ = sensor; }
+  void set_filter_clean_hours_sensor(sensor::Sensor *sensor) { this->filter_clean_hours_sensor_ = sensor; }
+  void set_pm_2_5_sensor(sensor::Sensor *sensor) { this->pm_2_5_sensor_ = sensor; }
 
   void set_taixia_parent(TaiXia *parent) { this->parent_ = parent; }
 
@@ -36,7 +37,8 @@ class AirConditionerSensor : public TaiXiaListener, public PollingComponent {
   sensor::Sensor *energy_consumption_sensor_{nullptr};
   sensor::Sensor *operating_hours_sensor_{nullptr};
   sensor::Sensor *error_code_sensor_{nullptr};
-  sensor::Sensor *filiter_clean_hours_sensor_{nullptr};
+  sensor::Sensor *filter_clean_hours_sensor_{nullptr};
+  sensor::Sensor *pm_2_5_sensor_{nullptr};
 
   void handle_response(std::vector<uint8_t> &response) override;
 };
@@ -48,7 +50,7 @@ class DehumidifierSensor : public TaiXiaListener, public PollingComponent {
   void set_temperature_indoor_sensor(sensor::Sensor *sensor) { this->temperature_indoor_sensor_ = sensor; }
   void set_humidity_indoor_sensor(sensor::Sensor *sensor) { this->humidity_indoor_sensor_ = sensor; }
   void set_water_full_sensor(sensor::Sensor *sensor) { this->water_full_sensor_ = sensor; }
-  void set_filiter_clean_sensor(sensor::Sensor *sensor) { this->filiter_clean_sensor_ = sensor; }
+  void set_filter_clean_sensor(sensor::Sensor *sensor) { this->filter_clean_sensor_ = sensor; }
   void set_side_air_vent_sensor(sensor::Sensor *sensor) { this->side_air_vent_sensor_ = sensor; }
   void set_error_code_sensor_(sensor::Sensor *sensor) { this->error_code_sensor_ = sensor; }
   void set_operating_current_sensor(sensor::Sensor *sensor) { this->operating_current_sensor_ = sensor; }
@@ -66,7 +68,7 @@ class DehumidifierSensor : public TaiXiaListener, public PollingComponent {
   sensor::Sensor *temperature_indoor_sensor_{nullptr};
   sensor::Sensor *humidity_indoor_sensor_{nullptr};
   sensor::Sensor *water_full_sensor_{nullptr};
-  sensor::Sensor *filiter_clean_sensor_{nullptr};
+  sensor::Sensor *filter_clean_sensor_{nullptr};
   sensor::Sensor *side_air_vent_sensor_{nullptr};
   sensor::Sensor *error_code_sensor_{nullptr};
   sensor::Sensor *operating_current_sensor_{nullptr};
@@ -151,6 +153,8 @@ class ErvSensor : public TaiXiaListener, public PollingComponent {
   void update() override;
   void set_temperature_indoor_sensor(sensor::Sensor *sensor) { this->temperature_indoor_sensor_ = sensor; }
   void set_temperature_outdoor_sensor(sensor::Sensor *sensor) { this->temperature_outdoor_sensor_ = sensor; }
+  void set_model_type_sensor(sensor::Sensor *sensor) { this->model_type_sensor_ = sensor; }
+  void set_error_code_sensor(sensor::Sensor *sensor) { this->error_code_sensor_ = sensor; }
 
   void set_taixia_parent(TaiXia *parent) { this->parent_ = parent; }
 
@@ -159,6 +163,8 @@ class ErvSensor : public TaiXiaListener, public PollingComponent {
 
   sensor::Sensor *temperature_indoor_sensor_{nullptr};
   sensor::Sensor *temperature_outdoor_sensor_{nullptr};
+  sensor::Sensor *model_type_sensor_{nullptr};
+  sensor::Sensor *error_code_sensor_{nullptr};
 
   void handle_response(std::vector<uint8_t> &response) override;
 };

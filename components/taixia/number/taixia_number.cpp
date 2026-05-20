@@ -34,7 +34,14 @@ static const char *const TAG = "taixia.nubmer";
 
     for (i = 3; i < response[0] - 3; i+=3) {
       if (this->service_id_ == response[i]) {
-        this->publish_state(get_u16(response, i + 1));
+        uint16_t raw = get_u16(response, i + 1);
+        if (raw == 0xFFFF) {
+          // TaiXia 協定中 0xFFFF 表示「無效 / 不適用」（如設備關機時計時器無意義）
+          // 保留 HA 顯示的上一個有效值，不覆蓋
+          //ESP_LOGV(TAG, "service_id=0x%02x: value is 0xFFFF (invalid), skipping publish", this->service_id_);
+          return;
+        }
+        this->publish_state(raw);
         return;
       }
     }

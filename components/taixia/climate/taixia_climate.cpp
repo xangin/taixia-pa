@@ -9,12 +9,83 @@ static const char *const TAG = "taixia.climate";
 
 using namespace esphome::climate;
 
+  const char *const Constants::AIR_DETECT = "Air Detect";
+  const char *const Constants::ANTI_MILDEW = "Anti Mildew";
+  const char *const Constants::SELF_CLEAN = "Self Clean";
+  const char *const Constants::BODY_MOTION = "Body Motion";
+
   static inline uint16_t get_u16(std::vector<uint8_t> &response, int start) {
     return (response[start] << 8) + response[start + 1];
   }
 
   static inline int16_t get_i16(std::vector<uint8_t> &response, int start) {
     return (int16_t) ((response[start] << 8) + response[start + 1]);
+  }
+
+  // Reverse-engineering helper: human readable name for each climate (SA ID 0x01)
+  // service code, based on CNS 16014 A.1 + observed Panasonic extensions.
+  static const char *climate_service_name(uint8_t code) {
+    switch (code) {
+      case 0x00: return "STATUS(power)";
+      case 0x01: return "MODE";
+      case 0x02: return "FAN_SPEED";
+      case 0x03: return "TARGET_TEMP";
+      case 0x04: return "TEMP_INDOOR";
+      case 0x05: return "SLEEP";
+      case 0x06: return "SLEEP_TIMER";
+      case 0x07: return "FUZZY_MODE";
+      case 0x08: return "AIR_PURIFIER";
+      case 0x09: return "ON_TIME(abs)";
+      case 0x0A: return "OFF_TIME(abs)";
+      case 0x0B: return "ON_TIMER(count)";
+      case 0x0C: return "OFF_TIMER(count)";
+      case 0x0D: return "SYSTEM_TIME";
+      case 0x0E: return "SWING_VERT";
+      case 0x0F: return "SWING_VERT_LVL";
+      case 0x10: return "SWING_HORIZ";
+      case 0x11: return "SWING_HORIZ_LVL";
+      case 0x12: return "FILTER_NOTIFY";
+      case 0x13: return "HUMIDITY_SET";
+      case 0x14: return "HUMIDITY_INDOOR";
+      case 0x15: return "CHECK";
+      case 0x16: return "AIR_QUALITY_DETECT";
+      case 0x17: return "MILDEW_PROOF";
+      case 0x18: return "SELF_CLEANING";
+      case 0x19: return "ACTIVITY";
+      case 0x1A: return "BOOST";
+      case 0x1B: return "ECO";
+      case 0x1C: return "POWER_LIMIT(comfort)";
+      case 0x1D: return "REMOTE_PROHIBIT";
+      case 0x1E: return "BEEPER";
+      case 0x1F: return "DISPLAY_MODE";
+      case 0x20: return "MOISTURIZE";
+      case 0x21: return "TEMP_OUTDOOR";
+      case 0x22: return "CAP_INDOOR";
+      case 0x23: return "CAP_OUTDOOR";
+      case 0x24: return "OP_CURRENT";
+      case 0x25: return "OP_VOLTAGE";
+      case 0x26: return "OP_PFACTOR";
+      case 0x27: return "OP_WATT";
+      case 0x28: return "ENERGY";
+      case 0x29: return "ERROR_CODE";
+      case 0x2A: return "FAULT_HIST_1";
+      case 0x2B: return "FAULT_HIST_2";
+      case 0x2C: return "FAULT_HIST_3";
+      case 0x2D: return "FAULT_HIST_4";
+      case 0x2E: return "FAULT_HIST_5";
+      case 0x2F: return "OP_HOURS";
+      case 0x30: return "FILTER_HOURS";
+      case 0x31: return "SYS_TIME_YEAR";
+      case 0x32: return "SYS_TIME_MD";
+      case 0x33: return "MONTHLY_ENERGY";
+      case 0x34: return "COMBO_TIMER";
+      case 0x37: return "PM2_5(ext)";
+      case 0x39: return "FROST_WASH(ext)";
+      case 0x3A: return "EXT_3A";
+      case 0x3B: return "EXT_3B";
+      case 0x40: return "EXT_40";
+      default:   return "UNKNOWN";
+    }
   }
 
   void TaiXiaClimate::dump_config() {
@@ -31,7 +102,7 @@ using namespace esphome::climate;
       ESP_LOGCONFIG(TAG, "   - %s", LOG_STR_ARG(climate_fan_mode_to_string(mode)));
     }
     for (const auto &mode : traits.get_supported_custom_fan_modes()) {
-      ESP_LOGCONFIG(TAG, "   - %s (c)", mode.c_str());
+      ESP_LOGCONFIG(TAG, "   - %s (c)", mode);
     }
 
     ESP_LOGCONFIG(TAG, "  Supported presets:");
@@ -39,7 +110,7 @@ using namespace esphome::climate;
       ESP_LOGCONFIG(TAG, "   - %s", LOG_STR_ARG(climate_preset_to_string(preset)));
     }
     for (const auto &preset : traits.get_supported_custom_presets()) {
-      ESP_LOGCONFIG(TAG, "   - %s (c)", preset.c_str());
+      ESP_LOGCONFIG(TAG, "   - %s (c)", preset);
     }
   }
 
@@ -63,7 +134,7 @@ using namespace esphome::climate;
     this->target_temperature = NAN;
     this->current_temperature = NAN;
     this->preset.reset();
-    this->custom_preset.reset();
+    this->clear_custom_preset_();
     this->publish_state();
   }
 
@@ -72,6 +143,10 @@ using namespace esphome::climate;
   void TaiXiaClimate::control(const climate::ClimateCall &call) {
     uint8_t command[6] = {0x06, SA_ID_CLIMATE, 0x00, 0x00, 0x00, 0x00};
     uint8_t buffer[6];
+    uint8_t swing_horizontal = 0x00;
+    uint8_t swing_horizontal_level = -1;
+    uint8_t swing_vertical = 0x00;
+    uint8_t swing_vertical_level = -1;
 
     if (this->sa_id_ == 14)
       command[1] = SA_ID_ERV;
@@ -138,35 +213,62 @@ using namespace esphome::climate;
       this->preset = *call.get_preset();
       command[2] = 0;
       switch (this->preset.value()) {
-        case climate::CLIMATE_PRESET_HOME:
-          command[2] = WRITE | SERVICE_ID_CLIMATE_AIR_PURIFIER;
+        case climate::CLIMATE_PRESET_NONE:
+          // Only reset the presets we actually expose. ECO/AIR_PURIFIER/
+          // SELF_CLEANING are managed via independent switch entities, so
+          // we must not zero them here or they'd fight the switches.
+          ESP_LOGV(TAG, "SERVICE_ID_CLIMATE_BOOST(%2.2x) turn off", SERVICE_ID_CLIMATE_BOOST);
+          command[2] = WRITE | SERVICE_ID_CLIMATE_BOOST;
+          command[4] = 0x00;
+          command[5] = this->parent_->checksum(command, 5);
+          this->parent_->send_cmd(command, buffer, 6);
+
+          ESP_LOGV(TAG, "SERVICE_ID_CLIMATE_SLEEP(%2.2x) turn off", SERVICE_ID_CLIMATE_SLEEP);
+          command[2] = WRITE | SERVICE_ID_CLIMATE_SLEEP;
+          command[4] = 0x00;
+          command[5] = this->parent_->checksum(command, 5);
+          this->parent_->send_cmd(command, buffer, 6);
+
+          ESP_LOGV(TAG, "SERVICE_ID_CLIMATE_ACTIVITY(%2.2x) turn off", SERVICE_ID_CLIMATE_ACTIVITY);
+          command[2] = WRITE | SERVICE_ID_CLIMATE_ACTIVITY;
+          command[4] = 0x00;
+          // command[5] = this->parent_->checksum(command, 5);
+          // this->parent_->send_cmd(command, buffer, 6);
+          break;
+        case climate::CLIMATE_PRESET_ECO:
+          ESP_LOGV(TAG, "CLIMATE_PRESET_ECO=>SERVICE_ID_CLIMATE_ECO(%2.2x) turn ON", SERVICE_ID_CLIMATE_ECO);
+          command[2] = WRITE | SERVICE_ID_CLIMATE_ECO;
           command[4] = 0x01;
         break;
         case climate::CLIMATE_PRESET_AWAY:
+          ESP_LOGV(TAG, "CLIMATE_PRESET_AWAY=>SERVICE_ID_CLIMATE_SELF_CLEANING(%2.2x) turn ON", SERVICE_ID_CLIMATE_SELF_CLEANING);
           command[2] = WRITE | SERVICE_ID_CLIMATE_SELF_CLEANING;
           command[4] = 0x01;
         break;
         case climate::CLIMATE_PRESET_BOOST:
+          ESP_LOGV(TAG, "CLIMATE_PRESET_BOOST=>SERVICE_ID_CLIMATE_BOOST(%2.2x) turn ON", SERVICE_ID_CLIMATE_BOOST);
           command[2] = WRITE | SERVICE_ID_CLIMATE_BOOST;
           command[4] = 0x01;
         break;
         case climate::CLIMATE_PRESET_COMFORT:
+          ESP_LOGV(TAG, "CLIMATE_PRESET_COMFORT=>SERVICE_ID_CLIMATE_COMFORT(%2.2x) turn ON", SERVICE_ID_CLIMATE_COMFORT);
           command[2] = WRITE | SERVICE_ID_CLIMATE_COMFORT;
           command[4] = 0x01;
         break;
-        case climate::CLIMATE_PRESET_ECO:
-          command[2] = WRITE | SERVICE_ID_CLIMATE_ECO;
+        case climate::CLIMATE_PRESET_HOME:
+          ESP_LOGV(TAG, "CLIMATE_PRESET_HOME=>SERVICE_ID_CLIMATE_AIR_PURIFIER(%2.2x) turn ON", SERVICE_ID_CLIMATE_AIR_PURIFIER);
+          command[2] = WRITE | SERVICE_ID_CLIMATE_AIR_PURIFIER;
           command[4] = 0x01;
         break;
         case climate::CLIMATE_PRESET_SLEEP:
+          ESP_LOGV(TAG, "CLIMATE_PRESET_SLEEP=>SERVICE_ID_CLIMATE_SLEEP(%2.2x) turn ON", SERVICE_ID_CLIMATE_SLEEP);
           command[2] = WRITE | SERVICE_ID_CLIMATE_SLEEP;
           command[4] = 0x01;
         break;
         case climate::CLIMATE_PRESET_ACTIVITY:
+          ESP_LOGV(TAG, "CLIMATE_PRESET_ACTIVITY=>SERVICE_ID_CLIMATE_ACTIVITY(%2.2x) turn ON", SERVICE_ID_CLIMATE_ACTIVITY);
           command[2] = WRITE | SERVICE_ID_CLIMATE_ACTIVITY;
           command[4] = 0x01;
-        break;
-        case climate::CLIMATE_PRESET_NONE:
         break;
       }
       if (command[2] != 0) {
@@ -226,30 +328,28 @@ using namespace esphome::climate;
       this->parent_->send_cmd(command, buffer, 6);
     }
 
+    // Q2: swing_mode is feedback-only for now — don't write H'0E/H'10/H'11 from
+    // climate.control(). Panasonic doesn't have H'0E/H'10 anyway, and writing
+    // H'11 here would clobber the user's swing_horizontal_level select/number.
+    // The smart swing routing (BOTH/VERTICAL/HORIZONTAL → H'0F + H'11 values)
+    // will be implemented in a later iteration.
     if (call.get_swing_mode().has_value()) {
+      // Intentionally accept the value but issue no UART writes.
+      // handle_response() will overwrite swing_mode on next poll based on
+      // actual H'0F / H'11 readings.
       this->swing_mode = *call.get_swing_mode();
-      if (this->swing_mode == CLIMATE_SWING_VERTICAL) {
-        command[2] = WRITE | SERVICE_ID_CLIMATE_SWING_VERTICAL;
-        command[4] = 0x1;
-      } else if (this->swing_mode == CLIMATE_SWING_HORIZONTAL) {
-        command[2] = WRITE | SERVICE_ID_CLIMATE_SWING_HORIZONTAL;
-        command[4] = 0x1;
-      } else if (this->swing_mode == CLIMATE_SWING_BOTH) {
-        command[2] = WRITE | SERVICE_ID_CLIMATE_SWING_VERTICAL;
-        command[4] = 0x1;
-        command[5] = this->parent_->checksum(command, 5);
-        this->parent_->send_cmd(command, buffer, 6);
-        command[2] = WRITE | SERVICE_ID_CLIMATE_SWING_HORIZONTAL;
-        command[4] = 0x1;
-      }
-      command[5] = this->parent_->checksum(command, 5);
-      this->parent_->send_cmd(command, buffer, 6);
+      (void)swing_horizontal;
+      (void)swing_horizontal_level;
+      (void)swing_vertical;
+      (void)swing_vertical_level;
     }
     this->publish_state();
-    if (this->parent_->get_version() < 3.0)
-      this->parent_->read_sa_status();
-    else
-      this->parent_->send(6, 0, 0, SERVICE_ID_READ_STATUS, 0xffff);
+    // Command Lock（大金風格）：發送指令後鎖定，防止設備回讀舊狀態覆蓋 UI
+    this->command_active_ = true;
+    this->cancel_timeout(COMMAND_TIMEOUT_NAME);
+    this->set_timeout(COMMAND_TIMEOUT_NAME, 3000, [this]() {
+      this->command_active_ = false;
+    });
   }
 
   bool TaiXiaClimate::update_status_() {
@@ -267,22 +367,22 @@ using namespace esphome::climate;
     ESP_LOGV(TAG, "[%s] update_status result=%s", this->get_name().c_str(), result ? "true" : "false");
   }
 
-  void TaiXiaClimate::set_supported_preset_modes(const std::set<climate::ClimatePreset> &modes) {
+  void TaiXiaClimate::set_supported_preset_modes(const climate::ClimatePresetMask &modes) {
     this->traits_.set_supported_presets(modes);
   }
 
-  void TaiXiaClimate::set_supported_swing_modes(const std::set<climate::ClimateSwingMode> &modes) {
+  void TaiXiaClimate::set_supported_swing_modes(const climate::ClimateSwingModeMask &modes) {
     this->traits_.set_supported_swing_modes(modes);
     this->traits_.add_supported_swing_mode(climate::CLIMATE_SWING_OFF);       // Always available
   }
 
-  void TaiXiaClimate::set_supported_fan_modes(const std::set<climate::ClimateFanMode> &modes) {
+  void TaiXiaClimate::set_supported_fan_modes(const climate::ClimateFanModeMask &modes) {
     this->traits_.set_supported_fan_modes(modes);
     this->traits_.add_supported_fan_mode(climate::CLIMATE_FAN_ON);   // Always available
     this->traits_.add_supported_fan_mode(climate::CLIMATE_FAN_OFF);  // Always available
   }
 
-  void TaiXiaClimate::set_supported_modes(const std::set<climate::ClimateMode> &modes) {
+  void TaiXiaClimate::set_supported_modes(const climate::ClimateModeMask &modes) {
     this->traits_.set_supported_modes(modes);
     this->traits_.add_supported_mode(climate::CLIMATE_MODE_OFF);   // Always available
     this->traits_.add_supported_mode(climate::CLIMATE_MODE_AUTO);  // Always available
@@ -303,7 +403,7 @@ using namespace esphome::climate;
 
   //    traits.set_supports_action(true);
 
-      this->traits_.set_supports_current_temperature(true);
+      this->traits_.add_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE);
 
       if (this->supports_cool_)
         this->traits_.add_supported_mode(CLIMATE_MODE_COOL);
@@ -360,13 +460,13 @@ using namespace esphome::climate;
           this->traits_.add_supported_preset(CLIMATE_PRESET_ACTIVITY);
 
         if (this->preset_modes_ & 1 << CLIMATE_PRESET_AIR_DETECT)
-          this->traits_.add_supported_custom_preset("Air Detect");
+          this->traits_.set_supported_custom_presets({Constants::AIR_DETECT});
         if (this->preset_modes_ & 1 << CLIMATE_PRESET_ANTI_MILDEW)
-          this->traits_.add_supported_custom_preset("Anti Mildew");
+          this->traits_.set_supported_custom_presets({Constants::ANTI_MILDEW});
         if (this->preset_modes_ & 1 << CLIMATE_PRESET_SELF_CLEAN)
-          this->traits_.add_supported_custom_preset("Self Clean");
+          this->traits_.set_supported_custom_presets({Constants::SELF_CLEAN});
         if (this->preset_modes_ & 1 << CLIMATE_PRESET_BODY_MOTION)
-          this->traits_.add_supported_custom_preset("Body Motion");
+          this->traits_.set_supported_custom_presets({Constants::BODY_MOTION});
       }
 
       this->traits_.set_visual_min_temperature(this->min_temp_);
@@ -374,9 +474,9 @@ using namespace esphome::climate;
       this->traits_.set_visual_temperature_step(this->temp_step_);
       this->traits_.set_visual_target_temperature_step(this->temp_step_);
       this->traits_.set_visual_current_temperature_step(this->temp_step_);
-      this->traits_.set_supports_two_point_target_temperature(false);
+      this->traits_.clear_feature_flags(climate::CLIMATE_REQUIRES_TWO_POINT_TARGET_TEMPERATURE);;
       if (this->supported_humidity_)
-          this->traits_.set_supports_current_humidity(true);
+          this->traits_.add_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_HUMIDITY);
 
       return this->traits_;
   }
@@ -384,12 +484,54 @@ using namespace esphome::climate;
   void TaiXiaClimate::handle_response(std::vector<uint8_t> &response) {
     uint8_t i;
     auto mode = CLIMATE_MODE_AUTO;
+    uint16_t value;
     uint8_t swing_vertical = 0;
+    uint8_t swing_vertical_level = -1;
     uint8_t swing_horizontal = 0;
+    uint8_t swing_horizontal_level = -1;
+    /* 0: swing
+     * 1: ----\\ stationary right
+     * 2: ---\-- stationary center-right
+     * 3: --||-- stationary center
+     * 4: --/--- stationary center-left
+     * 5: //---- stationary left
+     */
+
+    // Reverse-engineering helper — disabled by default. Re-enable by setting
+    // logger.logs.taixia.climate: DEBUG (or VERBOSE) in YAML.
+    if (!response.empty()) {
+      std::string hex;
+      hex.reserve(response.size() * 3);
+      char buf[5];
+      for (auto b : response) {
+        snprintf(buf, sizeof(buf), "%02X ", b);
+        hex += buf;
+      }
+      ESP_LOGD(TAG, "RX[%u]: %s", (unsigned)response.size(), hex.c_str());
+
+      if (response.size() >= 6 && response[0] >= 6) {
+        for (size_t k = 3; k + 2 < (size_t)response[0] - 1 && k + 2 < response.size(); k += 3) {
+          uint8_t code = response[k];
+          uint16_t v = (response[k + 1] << 8) | response[k + 2];
+          if (v == 0xFFFF)
+            continue;
+          ESP_LOGD(TAG, "  H'%02X %-22s = 0x%04X (%d)",
+                   code, climate_service_name(code), v, (int16_t)v);
+        }
+      }
+    }
 
     ESP_LOGV(TAG, " handle_response %x %x %x %x %x %x %x %x %x", \
         response[0], response[1], response[2], response[3], \
         response[4], response[5], response[6], response[7], response[8]);
+
+    // Preset accumulators — collected during the walk, decided after the loop
+    // so a value going 1→0 properly clears the preset (otherwise the old
+    // `if (==1) set` branch left preset stuck on the previous active one).
+    // 0xFFFF means "not present in this response".
+    uint16_t boost_val = 0xFFFF;
+    uint16_t sleep_val = 0xFFFF;
+    uint16_t activity_val = 0xFFFF;
 
     for (i = 3; i < response[0] - 3; i+=3) {
       if ((response[i + 1] == 0xFF) && (response[i + 2] == 0xFF)) {
@@ -468,39 +610,84 @@ using namespace esphome::climate;
           this->current_temperature = get_i16(response, i + 1);
           break;
         case SERVICE_ID_CLIMATE_SWING_VERTICAL:
-          swing_vertical = get_u16(response, i + 1);
+          value = get_u16(response, i + 1);
+          ESP_LOGV(
+              TAG,
+              "SERVICE_ID_CLIMATE_SWING_VERTICAL(%2.2x): %2.2d",
+              SERVICE_ID_CLIMATE_SWING_VERTICAL,
+              value);
+          if (swing_vertical_level != -1) {
+            if (value >= 1)
+              swing_vertical = 1;
+          } else {
+            ESP_LOGW(
+              TAG,
+              "SERVICE_ID_CLIMATE_SWING_VERTICAL ignored as **_LEVEL(%2.2x) already received (%2.2d)",
+              SERVICE_ID_CLIMATE_SWING_VERTICAL_LEVEL,
+              swing_vertical_level);
+          }
           break;
         case SERVICE_ID_CLIMATE_SWING_VERTICAL_LEVEL:
-          if (get_u16(response, i + 1) >= 1)
+          value = get_u16(response, i + 1);
+          ESP_LOGV(
+            TAG,
+            "SERVICE_ID_CLIMATE_SWING_VERTICAL_LEVEL(%2.2x): %2.2d",
+            SERVICE_ID_CLIMATE_SWING_VERTICAL_LEVEL,
+            value);
+          swing_vertical_level = (uint8_t)(value & 0xFF);
+          if (swing_vertical_level == 0) {
             swing_vertical = 1;
+          } else {
+            swing_vertical = 0;
+          }
           break;
         case SERVICE_ID_CLIMATE_SWING_HORIZONTAL:
-          swing_horizontal = get_u16(response, i + 1);
+          value = get_u16(response, i + 1);
+          ESP_LOGV(
+            TAG,
+            "SERVICE_ID_CLIMATE_SWING_HORIZONTAL(%2.2x): %2.2d",
+            SERVICE_ID_CLIMATE_SWING_HORIZONTAL,
+            value);
+          if (swing_horizontal_level != -1) {
+            if (value >= 1)
+              swing_horizontal = 1;
+          } else {
+            ESP_LOGW(
+              TAG,
+              "SERVICE_ID_CLIMATE_SWING_HORIZONTAL ignored as **_LEVEL(%2.2x) already received (%2.2d)",
+              SERVICE_ID_CLIMATE_SWING_HORIZONTAL_LEVEL,
+              swing_horizontal_level);
+          }
           break;
         case SERVICE_ID_CLIMATE_SWING_HORIZONTAL_LEVEL:
-          if (get_u16(response, i + 1) >= 1)
+          value = get_u16(response, i + 1);
+          ESP_LOGV(
+            TAG,
+            "SERVICE_ID_CLIMATE_SWING_HORIZONTAL_LEVEL(%2.2x): %2.2d",
+            SERVICE_ID_CLIMATE_SWING_HORIZONTAL_LEVEL,
+            value);
+          swing_horizontal_level = (uint8_t)(value & 0xFF);
+          if (swing_horizontal_level == 0) {
             swing_horizontal = 1;
+          } else {
+            swing_horizontal = 0;
+          }
+          break;
+        // presets — only reflect to climate.preset the ones we expose in YAML
+        // (BOOST/SLEEP/ACTIVITY). ECO/HOME/AWAY are now controlled via
+        // independent switch entities (power_saving/air_purifier/self_cleaning).
+        // Collect values here; final preset decided after the loop so a value
+        // going non-zero→0 properly clears the preset back to NONE.
+        case SERVICE_ID_CLIMATE_BOOST:
+          boost_val = get_u16(response, i + 1);
           break;
         case SERVICE_ID_CLIMATE_SLEEP:
-          if (get_u16(response, i + 1) == 1)
-            this->preset = climate::CLIMATE_PRESET_SLEEP;
+          sleep_val = get_u16(response, i + 1);
           break;
         case SERVICE_ID_CLIMATE_ACTIVITY:
-          if (get_u16(response, i + 1) == 1)
-            this->preset = climate::CLIMATE_PRESET_ACTIVITY;
+          activity_val = get_u16(response, i + 1);
           break;
-        case SERVICE_ID_CLIMATE_BOOST:
-          if (get_u16(response, i + 1) == 1)
-            this->preset = climate::CLIMATE_PRESET_BOOST;
-          break;
-        case SERVICE_ID_CLIMATE_ECO:
-          if (get_u16(response, i + 1) == 1)
-            this->preset = climate::CLIMATE_PRESET_ECO;
-          break;
-        case SERVICE_ID_CLIMATE_COMFORT:
-          if (get_u16(response, i + 1) == 1)
-            this->preset = climate::CLIMATE_PRESET_COMFORT;
-          break;
+        //
         case SERVICE_ID_CLIMATE_HUMIDITY_INDOOR:
           this->current_humidity = get_i16(response, i + 1);
           break;
@@ -509,14 +696,34 @@ using namespace esphome::climate;
     if ((swing_vertical == 1) && (swing_horizontal == 1))
       this->swing_mode = climate::CLIMATE_SWING_BOTH;
     else if ((swing_vertical == 0) && (swing_horizontal == 1))
-      this->swing_mode = climate::CLIMATE_SWING_VERTICAL;
-    else if ((swing_vertical == 1) && (swing_horizontal == 0))
       this->swing_mode = climate::CLIMATE_SWING_HORIZONTAL;
+    else if ((swing_vertical == 1) && (swing_horizontal == 0))
+      this->swing_mode = climate::CLIMATE_SWING_VERTICAL;
     else
       this->swing_mode = climate::CLIMATE_SWING_OFF;
 
-    this->publish_state();
-  }
+    // Decide preset from accumulators. Priority: BOOST > SLEEP > ACTIVITY > NONE.
+    // 0xFFFF means the H'XX wasn't in this response — keep previous bit.
+    // H'1A=2 (Panasonic 靜音) is NOT BOOST → fall through to non-boost branch.
+    if (boost_val == 1) {
+      this->preset = climate::CLIMATE_PRESET_BOOST;
+    } else if (sleep_val == 1) {
+      this->preset = climate::CLIMATE_PRESET_SLEEP;
+    } else if (activity_val != 0xFFFF && activity_val >= 1) {
+      this->preset = climate::CLIMATE_PRESET_ACTIVITY;
+    } else if (boost_val == 0 || sleep_val == 0 ||
+               (activity_val != 0xFFFF && activity_val == 0)) {
+      // At least one of the three reported "off" and none is on → NONE.
+      this->preset = climate::CLIMATE_PRESET_NONE;
+    }
+    // else: none of the three present in this response — leave preset unchanged.
+
+  // Command Lock：鎖定期間不更新 UI，防止設備回讀舊狀態造成閃爍
+  if (this->command_active_)
+    return;
+
+  this->publish_state();
+}
 
 }  // namespace taixia
 }  // namespace esphome

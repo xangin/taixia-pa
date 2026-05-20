@@ -14,7 +14,9 @@ from .. import (
     taixia_ns,
     CONF_TAIXIA_ID,
     TaiXia,
+    CONF_AIR_CONDITIONER,
     CONF_DEHUMIDIFIER,
+    CONF_ERV,
     CONF_SUPPORTED_SA
 )
 
@@ -25,13 +27,18 @@ CONF_FILTER_NOTIFY = "filter_notify"
 CONF_SIDE_AIR_FLOW = "side_air_flow"
 CONF_DEFROST = "defrost"
 CONF_ODOURS = "odours"
+CONF_FRONT_FILTER_NOTIFY = "front_filter_notify"
+CONF_PM25_FILTER_NOTIFY = "pm25_filter_notify"
+CONF_FILTER_RESET = "filter_reset"
 
 ICONS = {
     CONF_POWER: "mdi:chip",
     CONF_WATER_TANK_FULL: "mdi:cup-water",
     CONF_FILTER_NOTIFY: "mdi:air-filter",
     CONF_SIDE_AIR_FLOW: "mdi:waves",
-    CONF_DEFROST: "mdi:snowflake-melt"
+    CONF_DEFROST: "mdi:snowflake-melt",
+    CONF_FRONT_FILTER_NOTIFY: "mdi:air-filter",
+    CONF_PM25_FILTER_NOTIFY: "mdi:air-filter"
 }
 
 DEVICE_CLASS = {
@@ -39,21 +46,34 @@ DEVICE_CLASS = {
     CONF_WATER_TANK_FULL: DEVICE_CLASS_MOISTURE,
     CONF_FILTER_NOTIFY: DEVICE_CLASS_RUNNING,
     CONF_SIDE_AIR_FLOW: DEVICE_CLASS_RUNNING,
-    CONF_DEFROST: DEVICE_CLASS_RUNNING
+    CONF_DEFROST: DEVICE_CLASS_RUNNING,
+    CONF_FRONT_FILTER_NOTIFY: DEVICE_CLASS_RUNNING,
+    CONF_PM25_FILTER_NOTIFY: DEVICE_CLASS_RUNNING
+}
+
+CLIMATE_TYPES = {
+    CONF_FILTER_NOTIFY: 0x12
 }
 
 DEHUMIDIFIER_TYPES = {
     CONF_WATER_TANK_FULL: 0x0A,
     CONF_FILTER_NOTIFY: 0x0B,
     CONF_SIDE_AIR_FLOW: 0x0F,
-    CONF_DEFROST: 0x11
+    CONF_DEFROST: 0x11,
+    CONF_FILTER_RESET: 0x52
+}
+
+ERV_TYPES = {
+    CONF_FILTER_NOTIFY: 0x14,
+    CONF_FRONT_FILTER_NOTIFY: 0x1C,
+    CONF_PM25_FILTER_NOTIFY: 0x1D
 }
 
 COMMON_TYPES = {
     CONF_POWER: 0x00
 }
 
-TYPES = DEHUMIDIFIER_TYPES
+TYPES = CLIMATE_TYPES | DEHUMIDIFIER_TYPES | ERV_TYPES
 
 TaiXiaBinarySensor = taixia_ns.class_("TaiXiaBinarySensor", binary_sensor.BinarySensor, cg.Component)
 
@@ -97,9 +117,19 @@ async def to_code(config):
     if config[CONF_TYPE] not in CONF_SUPPORTED_SA:
         raise ("SA TYPE is not supported yet")
 
+    if config[CONF_TYPE] == CONF_AIR_CONDITIONER:
+        sa_id = 1
+        for sa_type, service_id in CLIMATE_TYPES.items():
+            await add_binay_sensor(config, sa_type, service_id, sa_id)
+
     if config[CONF_TYPE] == CONF_DEHUMIDIFIER:
         sa_id = 4
         for sa_type, service_id in DEHUMIDIFIER_TYPES.items():
+            await add_binay_sensor(config, sa_type, service_id, sa_id)
+
+    if config[CONF_TYPE] == CONF_ERV:
+        sa_id = 14
+        for sa_type, service_id in ERV_TYPES.items():
             await add_binay_sensor(config, sa_type, service_id, sa_id)
 
     taixia = await cg.get_variable(config[CONF_TAIXIA_ID])

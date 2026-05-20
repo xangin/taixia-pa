@@ -71,7 +71,7 @@ CONF_OPERATING_WATT = "operating_watt"
 CONF_ENERGY_CONSUMPTON = "energy_consumption"
 CONF_OPERATING_HOURS = "operating_hours"
 CONF_ERROR_CODE = "error_code"
-CONF_FILITER_CLEAN_HOURS = "filiter_clean_hours"
+CONF_FILTER_CLEAN_HOURS = "filter_clean_hours"
 
 CONF_WASH_LEFT_COUNT = "wash_left_count"
 CONF_WASH_LEFT_HOURS = "wash_left_hours"
@@ -84,14 +84,17 @@ CONF_TOTAL_LEFT_HOURS = "total_left_hours"
 CONF_APPOINT_LEFT_HOURS = "appoint_left_hours"
 
 CONF_WATER_FULL = "water_full"
-CONF_FILITER_CLEAN = "filiter_clean"
+CONF_FILTER_CLEAN = "filter_clean"
 CONF_SIDE_AIR_VENT = "side_air_vent"
 CONF_DEFROST = "defrost"
 CONF_ODOURS = "odours"
 
+CONF_MODEL_TYPE = "model_type"
+
 CONF_AIR_QUALITY = "air_quality"
 ICON_THOUGHT_BUBBLE = "mdi:thought-bubble"
 ICON_ODOURS = "mdi:emoticon-poop"
+
 
 CONFIG_SCHEMA = cv.typed_schema(
     {
@@ -167,11 +170,18 @@ CONFIG_SCHEMA = cv.typed_schema(
                     device_class=DEVICE_CLASS_EMPTY,
                     entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
                 ),
-                cv.Optional(CONF_FILITER_CLEAN_HOURS): sensor.sensor_schema(
+                cv.Optional(CONF_FILTER_CLEAN_HOURS): sensor.sensor_schema(
                     unit_of_measurement=UNIT_HOUR,
                     icon=ICON_TIMER,
                     accuracy_decimals=0,
                     device_class=DEVICE_CLASS_DURATION,
+                    state_class=STATE_CLASS_MEASUREMENT,
+                ),
+                cv.Optional(CONF_PM_2_5): sensor.sensor_schema(
+                    unit_of_measurement=UNIT_MICROGRAMS_PER_CUBIC_METER,
+                    icon=ICON_CHEMICAL_WEAPON,
+                    accuracy_decimals=2,
+                    device_class=DEVICE_CLASS_PM25,
                     state_class=STATE_CLASS_MEASUREMENT,
                 )
             }
@@ -294,7 +304,7 @@ CONFIG_SCHEMA = cv.typed_schema(
                     device_class=DEVICE_CLASS_EMPTY,
                     entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
                 ),
-                cv.Optional(CONF_FILITER_CLEAN): sensor.sensor_schema(
+                cv.Optional(CONF_FILTER_CLEAN): sensor.sensor_schema(
                     icon=ICON_CHIP,
                     device_class=DEVICE_CLASS_EMPTY,
                     entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
@@ -408,6 +418,16 @@ CONFIG_SCHEMA = cv.typed_schema(
                     device_class=DEVICE_CLASS_TEMPERATURE,
                     state_class=STATE_CLASS_MEASUREMENT,
                 ),
+                cv.Optional(CONF_ERROR_CODE): sensor.sensor_schema(
+                    icon=ICON_CHIP,
+                    device_class=DEVICE_CLASS_EMPTY,
+                    entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                ),
+                cv.Optional(CONF_MODEL_TYPE): sensor.sensor_schema(
+                    icon=ICON_CHIP,
+                    device_class=DEVICE_CLASS_EMPTY,
+                    entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                ),
             }
         ).extend(cv.polling_component_schema('30s')),
         CONF_ELECTRIC_FAN: cv.COMPONENT_SCHEMA.extend(
@@ -516,6 +536,15 @@ async def to_code(config):
         if CONF_OPERATING_HOURS in config:
             sens = await sensor.new_sensor(config[CONF_OPERATING_HOURS])
             cg.add(var.set_operating_hours_sensor(sens))
+        if CONF_ERROR_CODE in config:
+            sens = await sensor.new_sensor(config[CONF_ERROR_CODE])
+            cg.add(var.set_error_code_sensor(sens))
+        if CONF_PM_2_5 in config:
+            sens = await sensor.new_sensor(config[CONF_PM_2_5])
+            cg.add(var.set_pm_2_5_sensor(sens))
+        if CONF_FILTER_CLEAN_HOURS in config:
+            sens = await sensor.new_sensor(config[CONF_FILTER_CLEAN_HOURS])
+            cg.add(var.set_filter_clean_hours_sensor(sens))
 
     elif config[CONF_TYPE] == CONF_WASHING_MACHINE:
         cg.add(var.set_sa_id(0x03))
@@ -570,9 +599,9 @@ async def to_code(config):
         if CONF_WATER_FULL in config:
             sens = await sensor.new_sensor(config[CONF_WATER_FULL])
             cg.add(var.set_appoint_left_hours_sensor(sens))
-        if CONF_FILITER_CLEAN in config:
-            sens = await sensor.new_sensor(config[CONF_FILITER_CLEAN])
-            cg.add(var.set_filiter_clean_sensor(sens))
+        if CONF_FILTER_CLEAN in config:
+            sens = await sensor.new_sensor(config[CONF_FILTER_CLEAN])
+            cg.add(var.set_filter_clean_sensor(sens))
         if CONF_SIDE_AIR_VENT in config:
             sens = await sensor.new_sensor(config[CONF_SIDE_AIR_VENT])
             cg.add(var.set_side_air_vent_sensor(sens))
@@ -624,6 +653,12 @@ async def to_code(config):
         if CONF_TEMPERATURE_OUTDOOR in config:
             sens = await sensor.new_sensor(config[CONF_TEMPERATURE_OUTDOOR])
             cg.add(var.set_temperature_outdoor_sensor(sens))
+        if CONF_MODEL_TYPE in config:
+            sens = await sensor.new_sensor(config[CONF_MODEL_TYPE])
+            cg.add(var.set_model_type_sensor(sens))
+        if CONF_ERROR_CODE in config:
+            sens = await sensor.new_sensor(config[CONF_ERROR_CODE])
+            cg.add(var.set_error_code_sensor(sens))
 
     if config[CONF_TYPE] == CONF_ELECTRIC_FAN:
         cg.add(var.set_sa_id(0x0F))

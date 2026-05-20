@@ -19,6 +19,9 @@ class TaiXiaSwitch : public switch_::Switch, public TaiXiaListener, public Compo
   uint8_t service_id_;
   uint8_t sa_id_;
 
+  bool command_active_{false};
+  static constexpr const char *COMMAND_TIMEOUT_NAME = "taixia_switch_cmd";
+
   TaiXia *parent_;
   void handle_response(std::vector<uint8_t> &response) override;
 };

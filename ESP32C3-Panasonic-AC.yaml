@@ -1,0 +1,262 @@
+substitutions:
+  devicename: climate-p
+  upper_devicename: "Climate-P"
+  model_name: "Climate"
+  status_led_pin: GPIO8
+  tx_pin: GPIO7 #21 #pin3 (RX to AC)
+  rx_pin: GPIO6 #20 #pin4 (TX from AC)
+
+
+esphome:
+  name: $devicename
+  friendly_name: ${upper_devicename}
+  comment: ESP32C3 for $model_name
+  name_add_mac_suffix: false
+  project:
+    name: "TaiSEIA-Panasonic.$model_name"
+    version: "ESP32C3" #hardware
+
+external_components:
+  - source: github://xangin/taixia-pa@master
+    components: [ taixia ]
+
+esp32:
+  variant: ESP32C3
+  framework:
+    type: esp-idf
+
+uart:
+  id: uart_taixia
+  tx_pin: $tx_pin
+  rx_pin: $rx_pin
+  baud_rate: 9600
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: ${devicename}
+    password: "12345678"
+
+captive_portal:
+
+# Enable logging
+logger:
+  baud_rate: 0 # disable serial logging;
+
+# Enable Home Assistant API
+api:
+
+ota:
+  - platform: esphome
+
+status_led:
+  pin:
+    number: $status_led_pin
+
+button:
+  - platform: safe_mode
+    name: Safe Mode Boot
+    entity_category: diagnostic
+
+  - platform: restart
+    name: "Restart"
+
+  - platform: taixia
+    type: airconditioner
+    get_info:
+      name: "Get Info"
+    # H'28 寫 0 — 重設累計用電量
+    energy_reset:
+      name: "Reset Energy"
+    # H'12 寫 0 — 取消濾網清潔提示
+    filter_clean_notify:
+      name: "Clear Filter Notify"
+
+climate:
+  - platform: taixia
+    id: ac_climate
+    name: "Climate"
+    update_interval: 10s
+    supported_modes:
+      - COOL
+      - HEAT
+      - DRY
+      - FAN_ONLY
+    supported_fan_modes:
+      - LOW
+      - MEDIUM
+      - HIGH
+      - AUTO
+    # swing_mode 目前是 feedback only (Q2)：handle_response 會依 H'0F=0 / H'11=0
+    # 計算 VERTICAL/HORIZONTAL/BOTH/OFF，但 control() 不寫入。實際擺動位置用下方
+    # select entity 控制。
+    supported_swing_modes:
+      - VERTICAL
+      - HORIZONTAL
+      - BOTH
+    # ECO/HOME 已改為獨立 switch (power_saving / air_purifier)，從 preset 移除避免
+    # 雙重控制。AWAY/COMFORT 在 Panasonic 上不適用。
+    supported_presets:
+      - NONE
+      - BOOST     # H'1A=1 (急速)
+      - ACTIVITY  # H'19 任何非 0 (動向感應)
+      - SLEEP     # H'05=1 (舒眠)
+
+number:
+  - platform: taixia
+    type: airconditioner
+    off_timer:
+      name: "Off Timer"
+    on_timer:
+      name: "On Timer"
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+
+  - platform: uptime
+    name: "Uptime"
+    filters:
+      - lambda: return x / 3600;
+    unit_of_measurement: "h"
+    accuracy_decimals: 1
+
+  - platform: internal_temperature
+    name: "ESP32 Temperature"
+
+  - platform: taixia
+    type: airconditioner
+    temperature_indoor:
+      name: "Temperature Indoor"
+    temperature_outdoor:
+      name: "Temperature Outdoor"
+    operating_current:
+      name: "Current"
+    energy_consumption:
+      state_class: total_increasing
+      name: "Energy"
+    operating_watt:
+      name: "Power"
+    # H'29 錯誤訊息顯示功能 — 0=正常，非 0=故障碼
+    error_code:
+      name: "Error Code"
+
+select:
+  - platform: taixia
+    type: airconditioner
+
+    # H'1F 機體顯示模式 — Panasonic 實測只 cycle 0/1/2 三段
+    # (CNS 規格定義 3="全關"，但這台從遙控按不到，待測強制寫入)
+    display_mode:
+      id: sel_display_mode
+      name: "[1F] 面板燈光"
+      options:
+        "0最亮": 0
+        "1稍暗": 1
+        "2稍暗2": 2
+
+    # H'19 動向感應 — Panasonic 4-state cycle: 0→3→1→2→0
+    # 0/3 由按鍵設定，1/2 由 AC 內部感測自動填
+    motion_detect:
+      id: sel_motion_detect
+      name: "[19] 動向感應"
+      options:
+        "0關閉": 0
+        "1對人": 1
+        "2不對人": 2
+        "3自動": 3
+
+    # H'0F 上下擺動段位 — Panasonic 6 段 (0=自動掃, 1~5=固定位置)
+    swing_vertical_level:
+      id: sel_swing_vert
+      name: "[0F] 上下擺動位置"
+      options:
+        "0自動擺動": 0
+        "1上": 1
+        "2中上": 2
+        "3中": 3
+        "4中下": 4
+        "5下": 5
+
+    # H'11 左右擺動段位 — Panasonic 8 段 (0=自動掃, 1~7=固定位置)
+    swing_horizontal_level:
+      id: sel_swing_horiz
+      name: "[11] 左右擺動位置 (左葉片｜右葉片)"
+      options:
+        "0自動擺動": 0
+        "1中｜中": 1
+        "2右｜左": 2
+        "3左｜右": 3
+        "4左｜左": 4
+        "5左｜中": 5
+        "6中｜右": 6
+        "7右｜右": 7
+
+    # H'1A Panasonic 擴充急速/靜音 — 3-state (0:一般 / 1:急速 / 2:靜音)
+    quick_mode:
+      id: sel_quick_mode
+      name: "[1A] 急速/靜音"
+      options:
+        "0一般": 0
+        "1急速": 1
+        "2靜音": 2
+
+switch:
+  - platform: taixia
+    type: airconditioner
+    power:
+      name: "Power Switch"
+    beeper:
+      name: "Buzzer"
+    mildew_proof:
+      name: "Mildew Proof"
+    self_cleaning:
+      name: "Self Cleaning"
+    # H'1B 節電運轉 — Panasonic ECONAVI
+    power_saving:
+      name: "ECONAVI"
+    # H'08 空氣清淨功能 — Panasonic nanoeX
+    air_purifier:
+      name: "nanoeX"
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      
+  - platform: taixia
+    sa_id:
+      name: "SA ID"
+      id: sa_id
+    brand:
+      name: "SA Brand"
+    model:
+      name: "SA Model"
+    version:
+      name: "SA Version"
+    services:
+      name: "SA Services"
+
+binary_sensor:
+  - platform: taixia
+    type: airconditioner
+    # H'12 濾網清潔通知 — 1=須清洗 / 0=正常
+    filter_notify:
+      name: "Filter Notify"
+
+  - platform: status
+    name: "Status"
+
+taixia:
+  sa_id: 1
+  response_time: 65000
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time

@@ -13,7 +13,7 @@ static const char *const TAG = "taixia.fan";
     return (response[start] << 8) + response[start + 1];
   }
 
-  static inline std::string get_preset_mode(uint16_t mode) {
+  static inline std::string get_preset_mode_(uint16_t mode) {
     switch (mode){
       case 0:
         return "auto";
@@ -180,12 +180,16 @@ static const char *const TAG = "taixia.fan";
                     this->speed = get_u16(response, i + 1);
                   break;
                   case SERVICE_ID_DEHUMIDTFIER_MODE:
-                    this->preset_mode = get_preset_mode(get_u16(response, i + 1));
+                    this->set_preset_mode_(get_preset_mode_(get_u16(response, i + 1)));
                   break;
                 }
             }
         }
-        this->publish_state();
+        // Command Lock：鎖定期間不更新 UI
+        // 注：不道欲盡置於 handle_response 开頭，因為 handle_response尚需處理資料解析
+        // 這裡跟気候元件一樣，對鎖定期間的回讀跳過 publish
+        if (!this->command_active_)
+          this->publish_state();
     }
   }
 
@@ -239,6 +243,7 @@ static const char *const TAG = "taixia.fan";
         }
         set_speed = true;
     }
+    ESP_LOGE(TAG, "set speed %d", set_speed);
     if (call.get_state().has_value()) {
         this->state = *call.get_state();
         if (!set_speed) {
@@ -269,9 +274,8 @@ static const char *const TAG = "taixia.fan";
             this->parent_->send_cmd(command, buffer, 6);
         }
     }
-    if (!call.get_preset_mode().empty()) {
-      this->preset_mode = call.get_preset_mode();
-      uint8_t mode = get_preset_mode_value(this->preset_mode);
+    if (call.get_preset_mode() != nullptr) {
+      uint8_t mode = get_preset_mode_value(call.get_preset_mode());
 
       command[2] = WRITE | preset_mode;
       command[4] = mode;
@@ -280,7 +284,12 @@ static const char *const TAG = "taixia.fan";
     }
 
     this->publish_state();
-    this->parent_->send(6, 0, 0, SERVICE_ID_READ_STATUS, 0xffff);
+    // Command Lock（大金風格）：發送指令後鎖定，防止設備回讀舊狀態覆蓋 UI
+    this->command_active_ = true;
+    this->cancel_timeout(COMMAND_TIMEOUT_NAME);
+    this->set_timeout(COMMAND_TIMEOUT_NAME, 3000, [this]() {
+      this->command_active_ = false;
+    });
   }
 
 

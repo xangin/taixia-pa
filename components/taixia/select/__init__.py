@@ -32,7 +32,10 @@ ElectricFanSelect = taixia_ns.class_("ElectricFanSelect", select.Select, cg.Comp
 
 CONF_FUZZY_MODE = "fuzzy_mode"
 CONF_DISPLAY_MODE = "display_mode"
+CONF_SWING_VERTICAL_LEVEL = "swing_vertical_level"
+CONF_SWING_HORIZONTAL_LEVEL = "swing_horizontal_level"
 CONF_MOTION_DETECT = "motion_detect"
+CONF_QUICK_MODE = "quick_mode"
 
 CONF_OPERATING_PROGRAM = "operating_program"
 CONF_AIR_PURIFIER = "air_purifier"
@@ -48,9 +51,12 @@ CONF_PRE_HEAT_COOL = "pre_heat_cool"
 
 DEFAULT_ICON = "mdi:format-list-bulleted"
 ICONS = {
-    CONF_FUZZY_MODE: "mdi:motion-sensor",
-    CONF_DISPLAY_MODE: "mdi:overscan",
+    CONF_FUZZY_MODE: "mdi:chip",
+    CONF_DISPLAY_MODE: "mdi:lightbulb-on-outline",
+    CONF_SWING_VERTICAL_LEVEL: "mdi:pan-vertical",
+    CONF_SWING_HORIZONTAL_LEVEL: "mdi:pan-horizontal",
     CONF_MOTION_DETECT: "mdi:motion-sensor",
+    CONF_QUICK_MODE: "mdi:speedometer",
     CONF_OPERATING_PROGRAM: "mdi:state-machine",
     CONF_AIR_PURIFIER: "mdi:air-purifier",
     CONF_SOUND: "mdi:volume-source",
@@ -63,25 +69,51 @@ ICONS = {
 }
 
 OPTIONS_FUZZY_MODE = {
-    "comfort": 0,
-    "too cold": 1,
-    "too hot": 2,
-    "off": 3,
-    "on": 4
+    "Comfortable": 0,
+    "Cold": 1,
+    "Warm": 2,
+    "Off": 3,
+    "On": 4
 }
 
 OPTIONS_DISPLAY_MODE= {
-    "light": 0,
-    "dark": 1,
-    "off": 2,
-    "all off": 3
+    "Bright": 0,
+    "On": 1,
+    "Dim": 2,
+    "Off": 3
+}
+
+OPTIONS_SWING_VERTICAL_LEVEL = {
+    "0": 0,  # swing
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+}
+
+OPTIONS_SWING_HORIZONTAL_LEVEL = {
+    "0": 0,  # swing
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    "6": 6,
+    "7": 7,
 }
 
 OPTIONS_MOTION_DETECT = {
-    "off": 0,
-    "to people": 1,
-    "not to people": 2,
-    "auto": 3
+    "0": 0,  # off
+    "1": 1,  # to people
+    "2": 2,  # not to people
+    "3": 3,  # auto
+}
+
+OPTIONS_QUICK_MODE = {
+    "0": 0,  # normal / off
+    "1": 1,  # powerful (急速)
+    "2": 2,  # quiet (靜音)
 }
 
 OPTIONS_WASH_PROGRAM = {
@@ -95,9 +127,9 @@ OPTIONS_WASH_PROGRAM = {
     "User-defined": 7,
     "Soak": 8,
     "Dry": 9,
-    "Quick Wash": 10,
+    "Quick wash": 10,
     "Tank wash":11,
-    "Warm Water Wash":12
+    "Warm water wash":12
 }
 
 OPTIONS_WASH_OTHER_FUNCTION = {
@@ -156,8 +188,8 @@ OPTIONS_AIR_PURFIFIER = {
 
 OPTIONS_SOUND = {
     "Off": 0,
-    "Key Sound": 1,
-    "Full and Key sounds": 2
+    "Key sound": 1,
+    "Full and key sounds": 2
 }
 
 OPTIONS_FAN_OPERATING_PROGRAM = {
@@ -169,7 +201,7 @@ OPTIONS_FAN_OPERATING_PROGRAM = {
 }
 
 OPTIONS_PURIFIER_OPERATING_PROGRAM = {
-    "Auot": 0,
+    "Auto": 0,
     "Mute": 1,
     "Low": 2,
     "Standard": 3,
@@ -177,7 +209,7 @@ OPTIONS_PURIFIER_OPERATING_PROGRAM = {
     "Super": 5
 }
 
-OPTIONS_ENTILATE_MODE = {
+OPTIONS_VENTILATE_MODE = {
     "Auto": 0,
     "Full": 1,
     "Normal": 2
@@ -197,37 +229,71 @@ CONFIG_SCHEMA = cv.typed_schema(
                 cv.GenerateID(CONF_TAIXIA_ID): cv.use_id(TaiXia),
                 cv.Optional(CONF_FUZZY_MODE): select.select_schema(
                     AirConditionerSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_FUZZY_MODE, DEFAULT_ICON)
                 ).extend(
                     {
-                        cv.Optional(CONF_OPTIONS): cv.All(
-                            cv.ensure_list(cv.string_strict), cv.Length(min=1)
+                        cv.Optional(CONF_OPTIONS): cv.Any(
+                            cv.All(cv.ensure_list(cv.string_strict), cv.Length(min=1)),
+                            cv.Schema({cv.string_strict: cv.int_range(min=0, max=255)}),
                         )
                     }
                 ),
                 cv.Optional(CONF_DISPLAY_MODE): select.select_schema(
                     AirConditionerSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_DISPLAY_MODE, DEFAULT_ICON)
                 ).extend(
                     {
-                        cv.Optional(CONF_OPTIONS): cv.All(
-                            cv.ensure_list(cv.string_strict), cv.Length(min=1)
+                        cv.Optional(CONF_OPTIONS): cv.Any(
+                            cv.All(cv.ensure_list(cv.string_strict), cv.Length(min=1)),
+                            cv.Schema({cv.string_strict: cv.int_range(min=0, max=255)}),
                         )
                     }
                 ),
                 cv.Optional(CONF_MOTION_DETECT): select.select_schema(
                     AirConditionerSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_MOTION_DETECT, DEFAULT_ICON)
                 ).extend(
                     {
-                        cv.Optional(CONF_OPTIONS): cv.All(
-                            cv.ensure_list(cv.string_strict), cv.Length(min=1)
+                        cv.Optional(CONF_OPTIONS): cv.Any(
+                            cv.All(cv.ensure_list(cv.string_strict), cv.Length(min=1)),
+                            cv.Schema({cv.string_strict: cv.int_range(min=0, max=255)}),
                         )
                     }
-                )
+                ),
+                cv.Optional(CONF_SWING_VERTICAL_LEVEL): select.select_schema(
+                    AirConditionerSelect,
+                    icon=ICONS.get(CONF_SWING_VERTICAL_LEVEL, DEFAULT_ICON)
+                ).extend(
+                    {
+                        cv.Optional(CONF_OPTIONS): cv.Any(
+                            cv.All(cv.ensure_list(cv.string_strict), cv.Length(min=1)),
+                            cv.Schema({cv.string_strict: cv.int_range(min=0, max=255)}),
+                        )
+                    }
+                ),
+                cv.Optional(CONF_SWING_HORIZONTAL_LEVEL): select.select_schema(
+                    AirConditionerSelect,
+                    icon=ICONS.get(CONF_SWING_HORIZONTAL_LEVEL, DEFAULT_ICON)
+                ).extend(
+                    {
+                        cv.Optional(CONF_OPTIONS): cv.Any(
+                            cv.All(cv.ensure_list(cv.string_strict), cv.Length(min=1)),
+                            cv.Schema({cv.string_strict: cv.int_range(min=0, max=255)}),
+                        )
+                    }
+                ),
+                cv.Optional(CONF_QUICK_MODE): select.select_schema(
+                    AirConditionerSelect,
+                    icon=ICONS.get(CONF_QUICK_MODE, DEFAULT_ICON)
+                ).extend(
+                    {
+                        cv.Optional(CONF_OPTIONS): cv.Any(
+                            cv.All(cv.ensure_list(cv.string_strict), cv.Length(min=1)),
+                            cv.Schema({cv.string_strict: cv.int_range(min=0, max=255)}),
+                        )
+                    }
+                ),
+
             }
         ),
         CONF_AIRPURIFIER: cv.COMPONENT_SCHEMA.extend(
@@ -236,7 +302,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 cv.GenerateID(CONF_TAIXIA_ID): cv.use_id(TaiXia),
                 cv.Optional(CONF_OPERATING_PROGRAM): select.select_schema(
                     AirPurifierSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_OPERATING_PROGRAM, DEFAULT_ICON)
                 ).extend(
                     {
@@ -253,7 +318,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 cv.GenerateID(CONF_TAIXIA_ID): cv.use_id(TaiXia),
                 cv.Optional(CONF_OPERATING_PROGRAM): select.select_schema(
                     DehumidifierSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_OPERATING_PROGRAM, DEFAULT_ICON)
                 ).extend(
                     {
@@ -264,7 +328,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 ),
                 cv.Optional(CONF_AIR_PURIFIER): select.select_schema(
                     DehumidifierSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_AIR_PURIFIER, DEFAULT_ICON)
                 ).extend(
                     {
@@ -275,7 +338,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 ),
                 cv.Optional(CONF_SOUND): select.select_schema(
                     DehumidifierSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_SOUND, DEFAULT_ICON)
                 ).extend(
                     {
@@ -292,7 +354,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 cv.GenerateID(CONF_TAIXIA_ID): cv.use_id(TaiXia),
                 cv.Optional(CONF_WASH_PROGRAM): select.select_schema(
                     WashingMachineSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_WASH_PROGRAM, DEFAULT_ICON)
                 ).extend(
                     {
@@ -303,7 +364,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 ),
                 cv.Optional(CONF_WASH_OTHER_FUNCTION): select.select_schema(
                     WashingMachineSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_WASH_OTHER_FUNCTION, DEFAULT_ICON)
                 ).extend(
                     {
@@ -314,7 +374,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 ),
                 cv.Optional(CONF_WASH_MODE): select.select_schema(
                     WashingMachineSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_WASH_MODE, DEFAULT_ICON)
                 ).extend(
                     {
@@ -325,7 +384,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 ),
                 cv.Optional(CONF_WARM_WATER_PROGRAM): select.select_schema(
                     WashingMachineSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_WARM_WATER_PROGRAM, DEFAULT_ICON)
                 ).extend(
                     {
@@ -342,7 +400,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 cv.GenerateID(CONF_TAIXIA_ID): cv.use_id(TaiXia),
                 cv.Optional(CONF_VENTILATE_MODE): select.select_schema(
                     ErvSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_VENTILATE_MODE, DEFAULT_ICON)
                 ).extend(
                     {
@@ -353,7 +410,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 ),
                 cv.Optional(CONF_PRE_HEAT_COOL): select.select_schema(
                     ErvSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_PRE_HEAT_COOL, DEFAULT_ICON)
                 ).extend(
                     {
@@ -370,7 +426,6 @@ CONFIG_SCHEMA = cv.typed_schema(
                 cv.GenerateID(CONF_TAIXIA_ID): cv.use_id(TaiXia),
                 cv.Optional(CONF_OPERATING_PROGRAM): select.select_schema(
                     ElectricFanSelect,
-                    entity_category=ENTITY_CATEGORY_CONFIG,
                     icon=ICONS.get(CONF_OPERATING_PROGRAM, DEFAULT_ICON)
                 ).extend(
                     {
@@ -389,8 +444,12 @@ CONFIG_SCHEMA = cv.typed_schema(
 
 
 def get_options(options, all_options):
+    # dict form: full override of label -> value (allows custom labels and value sets)
+    if isinstance(options, dict):
+        return dict(options) if options else all_options
+    # list form (legacy): filter the predefined options to a subset
     new_options = {}
-    for option in options:
+    for option in options or []:
         if option in list(all_options.keys()):
             new_options[option] = all_options[option]
     if len(new_options) < 1:
@@ -406,6 +465,12 @@ async def to_code(config):
     taixia = await cg.get_variable(config[CONF_TAIXIA_ID])
 
     sel = None
+    # Capture per-sub-select refs so we can wire cross-references between
+    # related selects after they're all created (e.g., motion_detect needs
+    # to know about its swing siblings for UI sync).
+    motion_sel = None
+    swing_vert_sel = None
+    swing_horiz_sel = None
     if config[CONF_TYPE] == CONF_AIR_CONDITIONER:
         cg.add(var.set_sa_id(0x01))
         if CONF_FUZZY_MODE in config:
@@ -430,6 +495,30 @@ async def to_code(config):
             cg.add(taixia.register_listener(sel))
             cg.add(sel.set_taixia_parent(taixia))
 
+        if CONF_SWING_VERTICAL_LEVEL in config:
+            options_map = get_options(config[CONF_SWING_VERTICAL_LEVEL].get(
+                CONF_OPTIONS, {}), OPTIONS_SWING_VERTICAL_LEVEL)
+            sel = await select.new_select(config[CONF_SWING_VERTICAL_LEVEL],
+                    options=list(options_map.keys()))
+            cg.add(var.set_swing_vertical_level_select(sel))
+            cg.add(sel.set_service_id(0x0F))
+            cg.add(sel.set_select_mappings(list(options_map.values())))
+            cg.add(taixia.register_listener(sel))
+            cg.add(sel.set_taixia_parent(taixia))
+            swing_vert_sel = sel
+
+        if CONF_SWING_HORIZONTAL_LEVEL in config:
+            options_map = get_options(config[CONF_SWING_HORIZONTAL_LEVEL].get(
+                CONF_OPTIONS, {}), OPTIONS_SWING_HORIZONTAL_LEVEL)
+            sel = await select.new_select(config[CONF_SWING_HORIZONTAL_LEVEL],
+                    options=list(options_map.keys()))
+            cg.add(var.set_swing_horizontal_level_select(sel))
+            cg.add(sel.set_service_id(0x11))
+            cg.add(sel.set_select_mappings(list(options_map.values())))
+            cg.add(taixia.register_listener(sel))
+            cg.add(sel.set_taixia_parent(taixia))
+            swing_horiz_sel = sel
+
         if CONF_MOTION_DETECT in config:
             options_map = get_options(config[CONF_MOTION_DETECT].get(
                 CONF_OPTIONS, {}), OPTIONS_MOTION_DETECT)
@@ -440,6 +529,26 @@ async def to_code(config):
             cg.add(sel.set_select_mappings(list(options_map.values())))
             cg.add(taixia.register_listener(sel))
             cg.add(sel.set_taixia_parent(taixia))
+            motion_sel = sel
+
+        if CONF_QUICK_MODE in config:
+            options_map = get_options(config[CONF_QUICK_MODE].get(
+                CONF_OPTIONS, {}), OPTIONS_QUICK_MODE)
+            sel = await select.new_select(config[CONF_QUICK_MODE],
+                    options=list(options_map.keys()))
+            cg.add(var.set_quick_mode_select(sel))
+            cg.add(sel.set_service_id(0x1A))
+            cg.add(sel.set_select_mappings(list(options_map.values())))
+            cg.add(taixia.register_listener(sel))
+            cg.add(sel.set_taixia_parent(taixia))
+
+        # Cross-wire motion_detect → swing siblings so motion's control() can
+        # push optimistic 0 / restored-value publishes onto the swing selects.
+        if motion_sel is not None:
+            if swing_vert_sel is not None:
+                cg.add(motion_sel.set_swing_vertical_level_select(swing_vert_sel))
+            if swing_horiz_sel is not None:
+                cg.add(motion_sel.set_swing_horizontal_level_select(swing_horiz_sel))
 
     elif config[CONF_TYPE] == CONF_WASHING_MACHINE:
         cg.add(var.set_sa_id(0x03))
@@ -530,14 +639,14 @@ async def to_code(config):
             cg.add(sel.set_taixia_parent(taixia))
 
     elif config[CONF_TYPE] == CONF_ERV:
-        cg.add(var.set_sa_id(0x04))
+        cg.add(var.set_sa_id(0x0E))
         if CONF_VENTILATE_MODE in config:
             options_map = get_options(config[CONF_VENTILATE_MODE].get(
-                CONF_OPTIONS, {}), OPTIONS_ENTILATE_MODE)
+                CONF_OPTIONS, {}), OPTIONS_VENTILATE_MODE)
             sel = await select.new_select(config[CONF_VENTILATE_MODE],
                     options=list(options_map.keys()))
             cg.add(var.set_ventilate_mode_select(sel))
-            cg.add(sel.set_service_id(0x01))
+            cg.add(sel.set_service_id(0x15))
             cg.add(sel.set_select_mappings(list(options_map.values())))
             cg.add(taixia.register_listener(sel))
             cg.add(sel.set_taixia_parent(taixia))
@@ -549,7 +658,7 @@ async def to_code(config):
                     options=config.get(
                         CONF_OPTIONS, list(options_map.keys())))
             cg.add(var.set_pre_heat_cool_select(sel))
-            cg.add(sel.set_service_id(0x0D))
+            cg.add(sel.set_service_id(0x16))
             cg.add(sel.set_select_mappings(list(options_map.values())))
             cg.add(taixia.register_listener(sel))
             cg.add(sel.set_taixia_parent(taixia))

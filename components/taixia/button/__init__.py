@@ -2,7 +2,8 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import button
 from esphome.const import (
-    CONF_TYPE
+    CONF_TYPE,
+    ENTITY_CATEGORY_CONFIG
 )
 from .. import (
     taixia_ns,
@@ -19,38 +20,53 @@ from .. import (
 DEPENDENCIES = ["taixia"]
 
 ICON_BUTTON_POINTER = "mdi:button-pointer"
+ICON_HELP_NETWORK_OUTLINE = "mdi:help-network-outline"
 
-CONF_FILTER_CLEAN = "filter_clean"
+CONF_FILTER_CLEAN_NOTIFY = "filter_clean_notify"
+CONF_OPERATING_HOURS = "operating_hours"
+CONF_HEPA_FILTER = "HEAP_FILTER"
+CONF_FILTER_CLEAN_HOURS = "filter_clean_hours"
+CONF_FRONT_FILTER_CLEAN = "front_filter_notify"
+CONF_PM25_FILTER_NOTIFY = "pm25_filter_notify"
 CONF_ENERGY_RESET = "energy_reset"
+CONF_FILTER_RESET = "filter_reset"
 CONF_GET_INFO = "get_info"
 
 CLIMATE_TYPES = {
+    CONF_FILTER_CLEAN_NOTIFY: 0x12,
     CONF_ENERGY_RESET: 0x28,
-    CONF_FILTER_CLEAN: 0x30
+    CONF_OPERATING_HOURS: 0x2F,
+    CONF_FILTER_CLEAN_HOURS: 0x30
 }
 
 DEHUMIDIFIER_TYPES = {
-    CONF_FILTER_CLEAN: 0x0B,
-    CONF_ENERGY_RESET: 0x1D
+    CONF_FILTER_CLEAN_NOTIFY: 0x0B,
+    CONF_ENERGY_RESET: 0x1D,
+    CONF_FILTER_RESET: 0x52
 }
 
 AIRPURIFIER_TYPES = {
+    CONF_FILTER_CLEAN_NOTIFY: 0x05,
+    CONF_HEPA_FILTER: 0x06,
     CONF_ENERGY_RESET: 0x12
 }
 
 FAN_TYPES = {
-    CONF_FILTER_CLEAN: 0x05
+    CONF_FILTER_CLEAN_NOTIFY: 0x05
 }
 
 ERV_TYPES = {
-    CONF_FILTER_CLEAN: 0x14,
+    CONF_ENERGY_RESET: 0x0E,
+    CONF_FILTER_CLEAN_NOTIFY: 0x14,
+    CONF_FRONT_FILTER_CLEAN: 0x1C,
+    CONF_PM25_FILTER_NOTIFY: 0x1D
 }
 
 COMMON_TYPES = {
     CONF_GET_INFO: 0x00
 }
 
-TYPES = CLIMATE_TYPES | DEHUMIDIFIER_TYPES | FAN_TYPES
+TYPES = CLIMATE_TYPES | DEHUMIDIFIER_TYPES | ERV_TYPES | FAN_TYPES
 
 TaiXiaButton = taixia_ns.class_("TaiXiaButton", button.Button, cg.Component)
 
@@ -63,7 +79,14 @@ TAIXIA_COMPONENT_SCHEMA = cv.Schema(
         cv.GenerateID(): cv.declare_id(TaiXiaButton),
         cv.GenerateID(CONF_TAIXIA_ID): cv.use_id(TaiXia),
         cv.Required(CONF_TYPE): cv.string,
-        cv.Required(CONF_GET_INFO): TAIXIA_BUTTON_SCHEMA
+    }
+).extend(
+    {
+        cv.Required(CONF_GET_INFO): button.button_schema(
+            TaiXiaButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+            icon=ICON_HELP_NETWORK_OUTLINE
+        ).extend(cv.COMPONENT_SCHEMA)
     }
 )
 
