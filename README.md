@@ -1,7 +1,7 @@
 # taixia-pa — ESPHome TaiSEIA 元件 (Panasonic 客製版)
 
 Fork 自 [tsunglung/taixia](https://github.com/tsunglung/taixia)。原作者
-已完成 TaiSEIA 101 (CNS 16014) 協定核心、多廠牌支援、HomeAssistant
+已完成 TaiSEIA 101 協定核心、多廠牌支援、HomeAssistant
 整合等基礎建設，感謝原作者貢獻。
 
 本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 慣例 (詳見下方)。
@@ -19,10 +19,6 @@ Python component 名稱**仍為 `taixia`**，原本 YAML 只需要改 `external_
 ## 改了哪些東西
 
 ### Bug 修正
-- `select` 改值之後 UI 不會立刻更新 (要等下次 polling) — 加上 optimistic
-  publish + 3 秒 command lock，跟既有 switch / climate 相同 pattern。
-- `select` 收到非自己 service_id 的封包時噴 "Invalid value N" warning —
-  改成先過濾自己的 service_id 再查 mapping。
 - preset `NONE` 會 reset ECO / SELF_CLEANING / AIR_PURIFIER —
   這些功能改為獨立 switch，preset NONE 不再碰它們以免衝突。
 - preset 回讀只反映實際開啟的 BOOST / SLEEP / ACTIVITY，移除
