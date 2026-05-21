@@ -68,10 +68,8 @@ button:
     type: airconditioner
     get_info:
       name: "Get Info"
-    # H'28 寫 0 — 重設累計用電量
     energy_reset:
       name: "Reset Energy"
-    # H'12 寫 0 — 取消濾網清潔提示
     filter_clean_notify:
       name: "Clear Filter Notify"
 
@@ -79,11 +77,6 @@ climate:
   - platform: taixia
     id: ac_climate
     name: "Climate"
-    # 注意: climate.update_interval 在「有任何 sensor entity」時是 no-op
-    # (TaiXiaClimate::update() 看到 have_sensors=true 就 return)。真正的
-    # polling 由下方 AirConditionerSensor::update() 驅動，間隔請設在
-    # `sensor:` 區塊裡。這行留著只是文件性質。
-    update_interval: 10s
     supported_modes:
       - COOL
       - HEAT
@@ -94,20 +87,15 @@ climate:
       - MEDIUM
       - HIGH
       - AUTO
-    # swing_mode 目前是 feedback only (Q2)：handle_response 會依 H'0F=0 / H'11=0
-    # 計算 VERTICAL/HORIZONTAL/BOTH/OFF，但 control() 不寫入。實際擺動位置用下方
-    # select entity 控制。
     supported_swing_modes:
       - VERTICAL
       - HORIZONTAL
       - BOTH
-    # ECO/HOME 已改為獨立 switch (power_saving / air_purifier)，從 preset 移除避免
-    # 雙重控制。AWAY/COMFORT 在 Panasonic 上不適用。
     supported_presets:
       - NONE
-      - BOOST     # H'1A=1 (急速)
-      - ACTIVITY  # H'19 任何非 0 (動向感應)
-      - SLEEP     # H'05=1 (舒眠)
+      - BOOST
+      - ACTIVITY
+      - SLEEP
 
 number:
   - platform: taixia
@@ -134,7 +122,7 @@ sensor:
 
   - platform: taixia
     type: airconditioner
-    update_interval: 10s #實際輪詢頻率建議設在 15-30s，太頻繁會影響WIFI穩定性
+    update_interval: 10s
     temperature_indoor:
       name: "Temperature Indoor"
     temperature_outdoor:
@@ -146,7 +134,6 @@ sensor:
       name: "Energy"
     operating_watt:
       name: "Power"
-    # H'29 錯誤訊息顯示功能 — 0=正常，非 0=故障碼
     error_code:
       name: "Error Code"
 
@@ -154,59 +141,46 @@ select:
   - platform: taixia
     type: airconditioner
 
-    # H'1F 機體顯示模式 — Panasonic 實測只 cycle 0/1/2 三段
-    # (CNS 規格定義 3="全關"，但這台從遙控按不到，待測強制寫入)
     display_mode:
       id: sel_display_mode
-      name: "[1F] 面板燈光"
+      name: "面板燈光"
       options:
-        "0最亮": 0
-        "1稍暗": 1
-        "2稍暗2": 2
+        "最亮": 0
+        "稍暗": 1
+        "關": 2
 
-    # H'19 動向感應 — Panasonic 4-state cycle: 0→3→1→2→0
-    # 0/3 由按鍵設定，1/2 由 AC 內部感測自動填
     motion_detect:
       id: sel_motion_detect
-      name: "[19] 動向感應"
+      name: "動向感應"
       options:
-        "0關閉": 0
-        "1對人": 1
-        "2不對人": 2
-        "3自動": 3
+        "關閉": 0
+        "對人": 1
+        "不對人": 2
+        "自動": 3
 
-    # H'0F 上下擺動段位 — Panasonic 6 段 (0=自動掃, 1~5=固定位置)
     swing_vertical_level:
       id: sel_swing_vert
-      name: "[0F] 上下擺動位置"
+      name: "上下擺動位置"
       options:
-        "0自動擺動": 0
+        "自動擺動": 0
         "1上": 1
         "2中上": 2
         "3中": 3
         "4中下": 4
         "5下": 5
 
-    # H'11 左右擺動段位 — Panasonic 8 段 (0=自動掃, 1~7=固定位置)
     swing_horizontal_level:
       id: sel_swing_horiz
-      name: "[11] 左右擺動位置 (左葉片｜右葉片)"
+      name: "左右擺動位置"
       options:
-        "0自動擺動": 0
-        "1中｜中": 1
-        "2右｜左": 2
-        "3左｜右": 3
-        "4左｜左": 4
-        "5左｜中": 5
-        "6中｜右": 6
-        "7右｜右": 7
-
-    # H'1A 急速 / 靜音 — select 已移除
-    # 原因: SA Services 宣告 H'1A mask=0x03 (只接受 value 0 和 1)。Quiet (value 2)
-    # 是 IR 遙控器內部 path 才能觸發的「shadow state」，TaiSEIA 寫 H'1A=2 不會
-    # 真正切換。改用：
-    #   - switch.super_mode (下方 switch 區) → H'1A on/off 控制 BOOST
-    #   - text_sensor.boost_mode → 反饋目前狀態 (normal/boost/quiet)
+        "自動擺動": 0
+        "1中": 1
+        "2右偏左": 2
+        "3左偏右": 3
+        "4最左": 4
+        "5左偏中": 5
+        "6中偏右": 6
+        "7最右": 7
 
 switch:
   - platform: taixia
@@ -219,14 +193,10 @@ switch:
       name: "Mildew Proof"
     self_cleaning:
       name: "Self Cleaning"
-    # H'1B 節電運轉 — Panasonic ECONAVI
     power_saving:
       name: "ECONAVI"
-    # H'08 空氣清淨功能 — Panasonic nanoeX
     air_purifier:
       name: "nanoeX"
-    # H'1A 急速 — switch 嚴格 value==1 才顯示 ON
-    # (handle_response 對 H'1A 特例化處理，避免 IR 設靜音時 switch 也亮)
     super_mode:
       name: "Boost"
 
@@ -249,15 +219,12 @@ text_sensor:
       name: "SA Version"
     services:
       name: "SA Services"
-    # H'1A 急速/靜音狀態反饋 — 英文 keyword "normal"/"boost"/"quiet"
-    # 方便 HA 翻譯 (用 customize.yaml 或 template sensor 對應在地語言)
     boost_mode:
       name: "Boost Mode"
 
 binary_sensor:
   - platform: taixia
     type: airconditioner
-    # H'12 濾網清潔通知 — 1=須清洗 / 0=正常
     filter_notify:
       name: "Filter Notify"
 

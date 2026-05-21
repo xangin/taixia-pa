@@ -97,80 +97,30 @@ Panasonic 遙控器按「動向感應」鍵時，AC 內部會自動把上下、�
 
 ---
 
-## 急速 / 靜音 (H'1A) 的設計
+## 急速 / 靜音 (H'1A)
 
-Panasonic 遙控器上「急速 / 靜音」按鍵在 AC 面板顯示為 3-state 循環:
-```
-按一次  關閉(0) ──► 急速(1) ──► 靜音(2) ──► 急速(1) ⇄ 靜音(2)
-```
+- `switch.super_mode` 控制急速 (H'1A on/off)
+- `text_sensor.boost_mode` 反饋目前狀態，英文 keyword `normal` / `boost` / `quiet`
+  方便 HA 透過 `customize.yaml`、template sensor 或 Lovelace card 翻譯成在地語言
 
-但 SA Services 能力宣告顯示 **H'1A 官方只接受 value 0 和 1** (mask = 0x03)：
-
-```
-9A 00 03   H'1A W   mask=0b11 → 2 states (0/1)
-```
-
-實測結論:
-- **H'1A=1 (急速)** TaiSEIA 寫入有效，壓縮機真的會加力 ✓
-- **H'1A=2 (靜音)** TaiSEIA 寫入會被 AC firmware filter 掉，**polling 雖然回報 2 但實際模式沒切換**。靜音是 IR 遙控內部 path 才能觸發的 shadow state — 從 TaiSEIA 觸不到。
-
-### 因此本 fork 的設計
-- ~~`select.quick_mode` 已移除~~ (寫 value 2 沒效果，會誤導使用者)
-- `switch.super_mode` 控制 H'1A 0/1 — 啟動 / 關閉急速模式
-- `text_sensor.boost_mode` 反饋目前 H'1A 狀態:
-  - `normal` (H'1A=0)
-  - `boost` (H'1A=1)
-  - `quiet` (H'1A=2，只有遙控器能設)
-
-### switch.super_mode 嚴格比對
-`taixia_switch.cpp::handle_response` 對 H'1A 特例化:
-```cpp
-if (sa_id == CLIMATE && service_id == 0x1A) {
-  new_state = (response[i + 2] == 1);   // 只 value==1 才 ON
-}
-```
-否則通用 readback「任何非 0 = ON」會在遙控設靜音 (H'1A=2) 時誤亮 switch.boost。
-
-### 多語系建議
-`text_sensor.boost_mode` 回的是英文 lowercase keyword (`normal` / `boost` / `quiet`)，
-符合 HA / ESPhome community 慣例。要中文 (或其他語言) 顯示三條路:
-- **HA `customize.yaml`** 對 entity 自訂 friendly_name
-- **HA template sensor** 寫一個 mapping 字典轉成 localized string
-- **Lovelace card** conditional rendering
+靜音只能由遙控器觸發，本 fork 不嘗試從 TaiSEIA 寫入靜音 — 用 text_sensor 提供
+狀態反饋給 HA 自動化使用。
 
 ---
 
-## 輪詢間隔 (update_interval) 該設在哪
+## 輪詢間隔 (update_interval)
 
-**關鍵: `climate:` 區塊的 `update_interval` 在有 sensor entity 時是 no-op**。
+把 `update_interval` 設在 `sensor:` 區塊裡：
 
-原因 (見 `climate/taixia_climate.cpp::update()`)：
-```cpp
-void TaiXiaClimate::update() {
-    if (this->parent_->get_version() < 3.0)
-      return this->parent_->read_sa_status();
-    if (!this->parent_->have_sensors())     // ← 有 sensor 就跳過
-      this->parent_->send(6, 0, 0, SERVICE_ID_READ_STATUS, 0xffff);
-    return true;
-}
-```
-
-只要 YAML 有任何 `sensor: - platform: taixia` entry，`have_sensors_` 就會被設成 true，
-climate 的 polling 就不執行。**真正驅動 polling 的是 `AirConditionerSensor::update()`**
-(`sensor/taixia_sensor.cpp:167`)，預設 30 秒。
-
-### 正確設法
 ```yaml
 sensor:
   - platform: taixia
     type: airconditioner
-    update_interval: 10s     # ← polling 真正的頻率設這裡
+    update_interval: 10s
     temperature_indoor: ...
-    ...
 ```
 
-建議值: **10~30 秒**。太短 (<5s) UART 跟 Wi-Fi 會打架影響穩定性；太長 (>60s)
-HA 端會看不到即時變化。
+建議值 10~30 秒。
 
 ---
 
@@ -193,15 +143,12 @@ button:
   - platform: safe_mode
     name: Safe Mode Boot
     entity_category: diagnostic
-  # Restart is in base.
   - platform: taixia
     type: airconditioner
     get_info:
       name: "Get Info"
-    # H'28 寫 0 — 重設累計用電量
     energy_reset:
       name: "Reset Energy"
-    # H'12 寫 0 — 取消濾網清潔提示
     filter_clean_notify:
       name: "Clear Filter Notify"
 
@@ -209,149 +156,75 @@ climate:
   - platform: taixia
     id: ac_climate
     name: "Climate"
-    # 注意: climate.update_interval 在有 sensor entity 時為 no-op
-    # 真正 polling 間隔請設在下方 `sensor:` 區塊
-    update_interval: 10s
-    supported_modes:
-      - COOL
-      - HEAT
-      - DRY
-      - FAN_ONLY
-    supported_fan_modes:
-      - LOW
-      - MEDIUM
-      - HIGH
-      - AUTO
-    # swing_mode 目前是 feedback only：handle_response 會依 H'0F=0 / H'11=0
-    # 計算 VERTICAL/HORIZONTAL/BOTH/OFF，但 control() 不寫入。實際擺動位置用下方
-    # select entity 控制。
-    supported_swing_modes:
-      - VERTICAL
-      - HORIZONTAL
-      - BOTH
-    # ECO/HOME 已改為獨立 switch (power_saving / air_purifier)，從 preset 移除避免
-    # 雙重控制。AWAY/COMFORT 在 Panasonic 上不適用。
-    supported_presets:
-      - NONE
-      - BOOST     # H'1A=1 (急速)
-      - ACTIVITY  # H'19 任何非 0 (動向感應)
-      - SLEEP     # H'05=1 (舒眠)
+    supported_modes: [COOL, HEAT, DRY, FAN_ONLY]
+    supported_fan_modes: [LOW, MEDIUM, HIGH, AUTO]
+    supported_swing_modes: [VERTICAL, HORIZONTAL, BOTH]
+    supported_presets: [NONE, BOOST, ACTIVITY, SLEEP]
 
 number:
   - platform: taixia
     type: airconditioner
-    off_timer:
-      name: "Off Timer"
-    on_timer:
-      name: "On Timer"
+    off_timer: { name: "Off Timer" }
+    on_timer:  { name: "On Timer" }
 
 sensor:
   - platform: taixia
     type: airconditioner
-    # ★ 真正的 polling 間隔設這裡 (climate.update_interval 是 no-op)
     update_interval: 10s
-    temperature_indoor:
-      name: "Temperature Indoor"
-    temperature_outdoor:
-      name: "Temperature Outdoor"
-    operating_current:
-      name: "Current"
-    energy_consumption:
-      state_class: total_increasing
-      name: "Energy"
-    operating_watt:
-      name: "Power"
-    # H'29 錯誤訊息顯示功能 — 0=正常，非 0=故障碼
-    error_code:
-      name: "Error Code"
+    temperature_indoor:  { name: "Temperature Indoor" }
+    temperature_outdoor: { name: "Temperature Outdoor" }
+    operating_current:   { name: "Current" }
+    operating_watt:      { name: "Power" }
+    energy_consumption:  { name: "Energy", state_class: total_increasing }
+    error_code:          { name: "Error Code" }
 
 select:
   - platform: taixia
     type: airconditioner
 
-    # H'1F 機體顯示模式 — Panasonic 實測只 cycle 0/1/2 三段
-    # (CNS 規格定義 3="全關"，但這台從遙控按不到，待測強制寫入)
     display_mode:
-      id: sel_display_mode
-      name: "[1F] 面板燈光"
-      options:
-        "0最亮": 0
-        "1稍暗": 1
-        "2稍暗2": 2
+      name: "面板燈光"
+      options: { "最亮": 0, "稍暗": 1, "關": 2 }
 
-    # H'19 動向感應 — Panasonic 4-state cycle: 0→3→1→2→0
-    # 0/3 由按鍵設定，1/2 由 AC 內部感測自動填
     motion_detect:
-      id: sel_motion_detect
-      name: "[19] 動向感應"
-      options:
-        "0關閉": 0
-        "1對人": 1
-        "2不對人": 2
-        "3自動": 3
+      name: "動向感應"
+      options: { "關閉": 0, "對人": 1, "不對人": 2, "自動": 3 }
 
-    # H'0F 上下擺動段位 — Panasonic 6 段 (0=自動掃, 1~5=固定位置)
     swing_vertical_level:
-      id: sel_swing_vert
-      name: "[0F] 上下擺動位置"
-      options:
-        "0自動擺動": 0
-        "1上": 1
-        "2中上": 2
-        "3中": 3
-        "4中下": 4
-        "5下": 5
+      name: "上下擺動"
+      options: { "自動": 0, "1上": 1, "2中上": 2, "3中": 3, "4中下": 4, "5下": 5 }
 
-    # H'11 左右擺動段位 — Panasonic 8 段 (0=自動掃, 1~7=固定位置)
     swing_horizontal_level:
-      id: sel_swing_horiz
-      name: "[11] 左右擺動位置 (左葉片｜右葉片)"
+      name: "左右擺動"
       options:
-        "0自動擺動": 0
-        "1中｜中": 1
-        "2右｜左": 2
-        "3左｜右": 3
-        "4左｜左": 4
-        "5左｜中": 5
-        "6中｜右": 6
-        "7右｜右": 7
-
-    # H'1A 急速/靜音 select 已移除 — 詳見上方〈急速 / 靜音〉節說明
-    # 改用 switch.super_mode (BOOST 開關) + text_sensor.boost_mode (狀態反饋)
+        "自動": 0
+        "1": 1
+        "2": 2
+        "3": 3
+        "4": 4
+        "5": 5
+        "6": 6
+        "7": 7
 
 switch:
   - platform: taixia
     type: airconditioner
-    power:
-      name: "Power Switch"
-    beeper:
-      name: "Buzzer"
-    mildew_proof:
-      name: "Mildew Proof"
-    self_cleaning:
-      name: "Self Cleaning"
-    # H'1B 節電運轉 — Panasonic ECONAVI
-    power_saving:
-      name: "ECONAVI"
-    # H'08 空氣清淨功能 — Panasonic nanoeX
-    air_purifier:
-      name: "nanoeX"
-    # H'1A=1 急速 — boolean switch (handle_response 對 0x1A 嚴格 value==1)
-    super_mode:
-      name: "Boost"
+    power:         { name: "Power Switch" }
+    beeper:        { name: "Buzzer" }
+    mildew_proof:  { name: "Mildew Proof" }
+    self_cleaning: { name: "Self Cleaning" }
+    power_saving:  { name: "ECONAVI" }
+    air_purifier:  { name: "nanoeX" }
+    super_mode:    { name: "Boost" }
 
 text_sensor:
   - platform: taixia
-    # H'1A 狀態反饋 — 英文 keyword (normal/boost/quiet) 方便 HA 翻譯
-    boost_mode:
-      name: "Boost Mode"
+    boost_mode: { name: "Boost Mode" }
 
 binary_sensor:
   - platform: taixia
     type: airconditioner
-    # H'12 濾網清潔通知 — 1=須清洗 / 0=正常
-    filter_notify:
-      name: "Filter Notify"
+    filter_notify: { name: "Filter Notify" }
 
 taixia:
   sa_id: 1
@@ -360,8 +233,7 @@ taixia:
 
 > **注意**：ESPHome 2025.x 要求 `name` 的 ASCII 部分在同 platform 內必須
 > 唯一。**純中文** name 會全部轉成 `____` 互相衝突，請在 name 加入至少
-> 一個 ASCII 字元 (例如 `"[1F] 面板燈光"` 或 `"面板燈光 LED"`)，或像
-> 上面範例由 `options:` 的 key 提供 ASCII 字符。
+> 一個 ASCII 字元，或像上面範例由 `options:` 的 key 提供 ASCII 字符。
 
 ---
 
