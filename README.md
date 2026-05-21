@@ -156,75 +156,136 @@ climate:
   - platform: taixia
     id: ac_climate
     name: "Climate"
-    supported_modes: [COOL, HEAT, DRY, FAN_ONLY]
-    supported_fan_modes: [LOW, MEDIUM, HIGH, AUTO]
-    supported_swing_modes: [VERTICAL, HORIZONTAL, BOTH]
-    supported_presets: [NONE, BOOST, ACTIVITY, SLEEP]
+    supported_modes:
+      - COOL
+      - HEAT
+      - DRY
+      - FAN_ONLY
+    supported_fan_modes:
+      - LOW
+      - MEDIUM
+      - HIGH
+      - AUTO
+    supported_swing_modes:
+      - VERTICAL
+      - HORIZONTAL
+      - BOTH
+    supported_presets:
+      - NONE
+      - BOOST
+      - ACTIVITY
+      - SLEEP
 
 number:
   - platform: taixia
     type: airconditioner
-    off_timer: { name: "Off Timer" }
-    on_timer:  { name: "On Timer" }
+    off_timer:
+      name: "Off Timer"
+    on_timer:
+      name: "On Timer"
 
 sensor:
   - platform: taixia
     type: airconditioner
     update_interval: 10s
-    temperature_indoor:  { name: "Temperature Indoor" }
-    temperature_outdoor: { name: "Temperature Outdoor" }
-    operating_current:   { name: "Current" }
-    operating_watt:      { name: "Power" }
-    energy_consumption:  { name: "Energy", state_class: total_increasing }
-    error_code:          { name: "Error Code" }
+    temperature_indoor:
+      name: "Temperature Indoor"
+    temperature_outdoor:
+      name: "Temperature Outdoor"
+    operating_current:
+      name: "Current"
+    energy_consumption:
+      state_class: total_increasing
+      name: "Energy"
+    operating_watt:
+      name: "Power"
+    error_code:
+      name: "Error Code"
 
 select:
   - platform: taixia
     type: airconditioner
 
     display_mode:
+      id: sel_display_mode
       name: "面板燈光"
-      options: { "最亮": 0, "稍暗": 1, "關": 2 }
+      options:
+        "最亮": 0
+        "稍暗": 1
+        "關": 2
 
     motion_detect:
+      id: sel_motion_detect
       name: "動向感應"
-      options: { "關閉": 0, "對人": 1, "不對人": 2, "自動": 3 }
+      options:
+        "關閉": 0
+        "對人": 1
+        "不對人": 2
+        "自動": 3
 
     swing_vertical_level:
-      name: "上下擺動"
-      options: { "自動": 0, "1上": 1, "2中上": 2, "3中": 3, "4中下": 4, "5下": 5 }
+      id: sel_swing_vert
+      name: "上下擺動位置"
+      options:
+        "自動擺動": 0
+        "1上": 1
+        "2中上": 2
+        "3中": 3
+        "4中下": 4
+        "5下": 5
 
     swing_horizontal_level:
-      name: "左右擺動"
+      id: sel_swing_horiz
+      name: "左右擺動位置"
       options:
-        "自動": 0
-        "1": 1
-        "2": 2
-        "3": 3
-        "4": 4
-        "5": 5
-        "6": 6
-        "7": 7
+        "自動擺動": 0
+        "1中": 1
+        "2右偏左": 2
+        "3左偏右": 3
+        "4最左": 4
+        "5左偏中": 5
+        "6中偏右": 6
+        "7最右": 7
 
 switch:
   - platform: taixia
     type: airconditioner
-    power:         { name: "Power Switch" }
-    beeper:        { name: "Buzzer" }
-    mildew_proof:  { name: "Mildew Proof" }
-    self_cleaning: { name: "Self Cleaning" }
-    power_saving:  { name: "ECONAVI" }
-    air_purifier:  { name: "nanoeX" }
-    super_mode:    { name: "Boost" }
+    power:
+      name: "Power Switch"
+    beeper:
+      name: "Buzzer"
+    mildew_proof:
+      name: "Mildew Proof"
+    self_cleaning:
+      name: "Self Cleaning"
+    power_saving:
+      name: "ECONAVI"
+    air_purifier:
+      name: "nanoeX"
+    super_mode:
+      name: "Boost"
 
 text_sensor:
   - platform: taixia
-    boost_mode: { name: "Boost Mode" }
+    sa_id:
+      name: "SA ID"
+      id: sa_id
+    brand:
+      name: "SA Brand"
+    model:
+      name: "SA Model"
+    version:
+      name: "SA Version"
+    services:
+      name: "SA Services"
+    boost_mode:
+      name: "Boost Mode"
 
 binary_sensor:
   - platform: taixia
     type: airconditioner
-    filter_notify: { name: "Filter Notify" }
+    filter_notify:
+      name: "Filter Notify"
 
 taixia:
   sa_id: 1
