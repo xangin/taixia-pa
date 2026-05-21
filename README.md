@@ -1,13 +1,10 @@
 # taixia-pa — ESPHome TaiSEIA 元件 (Panasonic 客製版)
 
-> Fork 自 [tsunglung/taixia](https://github.com/tsunglung/taixia)。原作者
-> 已完成 TaiSEIA 101 (CNS 16014) 協定核心、多廠牌支援、HomeAssistant
-> 整合等基礎建設，感謝原作者貢獻。
->
-> 本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 慣例 (詳見下方)。
->
-> Python component 名稱**仍為 `taixia`**，原本 YAML 只需要改
-> `external_components` 的 `source` 即可切到此版本。
+Fork 自 [tsunglung/taixia](https://github.com/tsunglung/taixia)。
+
+原作者已完成 TaiSEIA 101 協定核心、HomeAssistant整合等基礎建設，感謝原作者貢獻。
+
+本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 慣例 (詳見下方)。
 
 ---
 
@@ -34,17 +31,12 @@
   `quiet`，方便 HA 多語系翻譯 (詳見下方〈急速/靜音〉節)。
 
 ### Panasonic 行為調整
-- **`climate.swing_mode` 改成純反饋**。Panasonic 沒有 H'0E / H'10
-  (boolean swing)，只有 H'0F / H'11 (level)。原本 control() 會寫
-  H'0E / H'10 / H'11 是無效或會 clobber 使用者的 level 設定，現在改
-  成只接受 call 但不寫 UART。`handle_response` 仍會根據
-  `H'0F == 0` / `H'11 == 0` 算出 swing_mode 顯示。
+- **`climate.swing_mode` 改成純反饋**。
   → 葉片位置請用新的 `select.swing_vertical_level` /
   `select.swing_horizontal_level` 控制。
 - **`select.motion_detect` (H'19) 跟葉片連動** — 詳見下節。
-- **`switch.super_mode` (H'1A=1) 嚴格比對** — handle_response 把 H'1A
-  特例化：value==1 才顯示 ON。原本通用 readback 是「任何非 0 = ON」，
-  會造成 IR 設靜音 (H'1A=2) 時 switch.super_mode 也亮起的錯誤。
+- **`switch.super_mode` (H'1A=1) 急速模式**
+
 
 ### Debug 輔助
 - 每筆 `taixia.climate` polling 回應的 hex dump + 各 H'XX 服務碼解析在
@@ -63,31 +55,10 @@
 Panasonic 遙控器按「動向感應」鍵時，AC 內部會自動把上下、左右擺動切到
 「自動掃 (level=0)」，這樣感應器才能真正接管葉片方向；關閉時又會把擺動還原。
 
-但**直接寫 H'19 = N，AC 不會有作用**，造成「動向感應好像有開、
-但葉片沒動」。本 fork 在 `AirConditionerSelect::control()` 內模擬遙控器行為：
-
-```
-動向感應 0 → 非0 (例如選「對人」):
-  1. ESP32 記住目前 H'0F / H'11 值 (saved_swing_vert / saved_swing_horiz)
-  2. UART 送 H'0F = 0
-  3. UART 送 H'11 = 0
-  4. publish "level=0 對應 label" 給上下擺動 select  (HA UI 瞬間更新)
-  5. publish "level=0 對應 label" 給左右擺動 select  (HA UI 瞬間更新)
-  6. UART 送 H'19 = 新值
-  7. publish 新 label 給動向感應 select
-
-動向感應 非0 → 0 (選「關閉」):
-  1. UART 送 H'19 = 0
-  2. UART 送 H'0F = saved_swing_vert (還原)
-  3. UART 送 H'11 = saved_swing_horiz (還原)
-  4. publish 還原後的 label 給兩個擺動 select
-  5. publish 「關閉」label 給動向感應 select
-
-動向感應 非0 → 非0 (例如「對人」→「不對人」):
-  - 只送 H'19，不動擺動
-```
+但**直接寫 H'19 = N，AC 不會有作用**
 
 ### 防止誤動作
+
 當 H'19 非 0 (動向感應 active) 時，**上下/左右擺動 select 寫入會被拒絕**：
 - `control()` log 出 `Swing change refused: motion_detect is active (H'19=N)`
 - 不送 UART
