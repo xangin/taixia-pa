@@ -678,9 +678,16 @@ using namespace esphome::climate;
         // independent switch entities (power_saving/air_purifier/self_cleaning).
         // Collect values here; final preset decided after the loop so a value
         // going non-zero→0 properly clears the preset back to NONE.
-        case SERVICE_ID_CLIMATE_BOOST:
+        case SERVICE_ID_CLIMATE_BOOST: {
           boost_val = get_u16(response, i + 1);
+          // Dedicated boost_mode text_sensor — English keywords so HA can
+          // translate / customize downstream.
+          const char *boost_text = "normal";
+          if (boost_val == 1) boost_text = "boost";
+          else if (boost_val == 2) boost_text = "quiet";
+          this->parent_->publish_boost_mode(boost_text);
           break;
+        }
         case SERVICE_ID_CLIMATE_SLEEP:
           sleep_val = get_u16(response, i + 1);
           break;

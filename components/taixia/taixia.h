@@ -248,6 +248,13 @@ class TaiXia : public uart::UARTDevice, public Component {
 
   void power_switch(bool state) { this->power_switch_->publish_state(state); }
 
+  // Publish boost_mode text from polling. Use English keyword so HA can
+  // map / translate it downstream (normal / boost / quiet).
+  void publish_boost_mode(const char *text) {
+    if (this->boost_mode_textsensor_ != nullptr)
+      this->boost_mode_textsensor_->publish_state(text);
+  }
+
   // TaiXIA
   TAIXIA_BINARY_SENSOR(power_binary_sensor)
   TAIXIA_BUTTON(get_info_button)
@@ -258,6 +265,8 @@ class TaiXia : public uart::UARTDevice, public Component {
   TAIXIA_TEXT_SENSOR(model_textsensor)
   TAIXIA_TEXT_SENSOR(version_textsensor)
   TAIXIA_TEXT_SENSOR(services_textsensor)
+  // boost_mode: derived from polled H'1A — values 0/1/2 → "normal"/"boost"/"quiet"
+  TAIXIA_TEXT_SENSOR(boost_mode_textsensor)
   TAIXIA_SWITCH(power_switch)
 
   // Climate 0x01

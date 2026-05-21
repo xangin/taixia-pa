@@ -79,6 +79,10 @@ climate:
   - platform: taixia
     id: ac_climate
     name: "Climate"
+    # 注意: climate.update_interval 在「有任何 sensor entity」時是 no-op
+    # (TaiXiaClimate::update() 看到 have_sensors=true 就 return)。真正的
+    # polling 由下方 AirConditionerSensor::update() 驅動，間隔請設在
+    # `sensor:` 區塊裡。這行留著只是文件性質。
     update_interval: 10s
     supported_modes:
       - COOL
@@ -130,6 +134,7 @@ sensor:
 
   - platform: taixia
     type: airconditioner
+    update_interval: 10s #實際輪詢頻率建議設在 15-30s，太頻繁會影響WIFI穩定性
     temperature_indoor:
       name: "Temperature Indoor"
     temperature_outdoor:
@@ -196,14 +201,12 @@ select:
         "6中｜右": 6
         "7右｜右": 7
 
-    # H'1A Panasonic 擴充急速/靜音 — 3-state (0:一般 / 1:急速 / 2:靜音)
-    quick_mode:
-      id: sel_quick_mode
-      name: "[1A] 急速/靜音"
-      options:
-        "0一般": 0
-        "1急速": 1
-        "2靜音": 2
+    # H'1A 急速 / 靜音 — select 已移除
+    # 原因: SA Services 宣告 H'1A mask=0x03 (只接受 value 0 和 1)。Quiet (value 2)
+    # 是 IR 遙控器內部 path 才能觸發的「shadow state」，TaiSEIA 寫 H'1A=2 不會
+    # 真正切換。改用：
+    #   - switch.super_mode (下方 switch 區) → H'1A on/off 控制 BOOST
+    #   - text_sensor.boost_mode → 反饋目前狀態 (normal/boost/quiet)
 
 switch:
   - platform: taixia
@@ -222,6 +225,10 @@ switch:
     # H'08 空氣清淨功能 — Panasonic nanoeX
     air_purifier:
       name: "nanoeX"
+    # H'1A 急速 — switch 嚴格 value==1 才顯示 ON
+    # (handle_response 對 H'1A 特例化處理，避免 IR 設靜音時 switch 也亮)
+    super_mode:
+      name: "Boost"
 
 text_sensor:
   - platform: version
@@ -242,6 +249,10 @@ text_sensor:
       name: "SA Version"
     services:
       name: "SA Services"
+    # H'1A 急速/靜音狀態反饋 — 英文 keyword "normal"/"boost"/"quiet"
+    # 方便 HA 翻譯 (用 customize.yaml 或 template sensor 對應在地語言)
+    boost_mode:
+      name: "Boost Mode"
 
 binary_sensor:
   - platform: taixia

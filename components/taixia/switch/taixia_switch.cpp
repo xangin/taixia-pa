@@ -45,6 +45,13 @@ static const char *const TAG = "taixia.switch";
             ((this->sa_id_ == SA_ID_DEHUMIDIFIER) && (this->service_id_ == SERVICE_ID_DEHUMIDTFIER_BEEPER))) {
             new_state = !new_state;
         }
+        // BOOST (H'1A) is multi-valued on Panasonic: 0=normal, 1=BOOST,
+        // 2=Quiet (set by IR remote). The BOOST switch must ONLY light up
+        // for value==1 — Quiet is reported by the boost_mode text_sensor.
+        if ((this->sa_id_ == SA_ID_CLIMATE) &&
+            (this->service_id_ == SERVICE_ID_CLIMATE_BOOST)) {
+          new_state = (response[i + 2] == 1);
+        }
         goto done;
       }
     }

@@ -1,24 +1,23 @@
 # taixia-pa — ESPHome TaiSEIA 元件 (Panasonic 客製版)
 
-Fork 自 [tsunglung/taixia](https://github.com/tsunglung/taixia)。原作者
-已完成 TaiSEIA 101 協定核心、多廠牌支援、HomeAssistant
-整合等基礎建設，感謝原作者貢獻。
-
-本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 慣例 (詳見下方)。
-
-Python component 名稱**仍為 `taixia`**，原本 YAML 只需要改 `external_components` 的 `source` 即可切到此版本。
-
----
-
-## 修改後在HA的內容:
-
-<img src="pictures/pa-controls.png" width="70%" />
+> Fork 自 [tsunglung/taixia](https://github.com/tsunglung/taixia)。原作者
+> 已完成 TaiSEIA 101 (CNS 16014) 協定核心、多廠牌支援、HomeAssistant
+> 整合等基礎建設，感謝原作者貢獻。
+>
+> 本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 慣例 (詳見下方)。
+>
+> Python component 名稱**仍為 `taixia`**，原本 YAML 只需要改
+> `external_components` 的 `source` 即可切到此版本。
 
 ---
 
 ## 改了哪些東西
 
 ### Bug 修正
+- `select` 改值之後 UI 不會立刻更新 (要等下次 polling) — 加上 optimistic
+  publish + 3 秒 command lock，跟既有 switch / climate 相同 pattern。
+- `select` 收到非自己 service_id 的封包時噴 "Invalid value N" warning —
+  改成先過濾自己的 service_id 再查 mapping。
 - preset `NONE` 會 reset ECO / SELF_CLEANING / AIR_PURIFIER —
   這些功能改為獨立 switch，preset NONE 不再碰它們以免衝突。
 - preset 回讀只反映實際開啟的 BOOST / SLEEP / ACTIVITY，移除
@@ -31,8 +30,8 @@ Python component 名稱**仍為 `taixia`**，原本 YAML 只需要改 `external_
 
 ### 新增 entity
 - `select.swing_vertical_level` (H'0F) — Panasonic 只有 level，沒 boolean。
-- `select.quick_mode` (H'1A) — Panasonic 把 H'1A 用成 3-state
-  (`0:一般 / 1:急速 / 2:靜音`)，原本 boolean switch 表達不出來。
+- `text_sensor.boost_mode` — H'1A 狀態反饋，英文 keyword `normal` / `boost` /
+  `quiet`，方便 HA 多語系翻譯 (詳見下方〈急速/靜音〉節)。
 
 ### Panasonic 行為調整
 - **`climate.swing_mode` 改成純反饋**。Panasonic 沒有 H'0E / H'10
@@ -43,6 +42,19 @@ Python component 名稱**仍為 `taixia`**，原本 YAML 只需要改 `external_
   → 葉片位置請用新的 `select.swing_vertical_level` /
   `select.swing_horizontal_level` 控制。
 - **`select.motion_detect` (H'19) 跟葉片連動** — 詳見下節。
+- **`switch.super_mode` (H'1A=1) 嚴格比對** — handle_response 把 H'1A
+  特例化：value==1 才顯示 ON。原本通用 readback 是「任何非 0 = ON」，
+  會造成 IR 設靜音 (H'1A=2) 時 switch.super_mode 也亮起的錯誤。
+
+### Debug 輔助
+- 每筆 `taixia.climate` polling 回應的 hex dump + 各 H'XX 服務碼解析在
+  DEBUG level 印出。預設關閉，需要時 YAML 開啟：
+  ```yaml
+  logger:
+    level: INFO
+    logs:
+      taixia.climate: DEBUG
+  ```
 
 ---
 
@@ -85,6 +97,83 @@ Panasonic 遙控器按「動向感應」鍵時，AC 內部會自動把上下、�
 
 ---
 
+## 急速 / 靜音 (H'1A) 的設計
+
+Panasonic 遙控器上「急速 / 靜音」按鍵在 AC 面板顯示為 3-state 循環:
+```
+按一次  關閉(0) ──► 急速(1) ──► 靜音(2) ──► 急速(1) ⇄ 靜音(2)
+```
+
+但 SA Services 能力宣告顯示 **H'1A 官方只接受 value 0 和 1** (mask = 0x03)：
+
+```
+9A 00 03   H'1A W   mask=0b11 → 2 states (0/1)
+```
+
+實測結論:
+- **H'1A=1 (急速)** TaiSEIA 寫入有效，壓縮機真的會加力 ✓
+- **H'1A=2 (靜音)** TaiSEIA 寫入會被 AC firmware filter 掉，**polling 雖然回報 2 但實際模式沒切換**。靜音是 IR 遙控內部 path 才能觸發的 shadow state — 從 TaiSEIA 觸不到。
+
+### 因此本 fork 的設計
+- ~~`select.quick_mode` 已移除~~ (寫 value 2 沒效果，會誤導使用者)
+- `switch.super_mode` 控制 H'1A 0/1 — 啟動 / 關閉急速模式
+- `text_sensor.boost_mode` 反饋目前 H'1A 狀態:
+  - `normal` (H'1A=0)
+  - `boost` (H'1A=1)
+  - `quiet` (H'1A=2，只有遙控器能設)
+
+### switch.super_mode 嚴格比對
+`taixia_switch.cpp::handle_response` 對 H'1A 特例化:
+```cpp
+if (sa_id == CLIMATE && service_id == 0x1A) {
+  new_state = (response[i + 2] == 1);   // 只 value==1 才 ON
+}
+```
+否則通用 readback「任何非 0 = ON」會在遙控設靜音 (H'1A=2) 時誤亮 switch.boost。
+
+### 多語系建議
+`text_sensor.boost_mode` 回的是英文 lowercase keyword (`normal` / `boost` / `quiet`)，
+符合 HA / ESPhome community 慣例。要中文 (或其他語言) 顯示三條路:
+- **HA `customize.yaml`** 對 entity 自訂 friendly_name
+- **HA template sensor** 寫一個 mapping 字典轉成 localized string
+- **Lovelace card** conditional rendering
+
+---
+
+## 輪詢間隔 (update_interval) 該設在哪
+
+**關鍵: `climate:` 區塊的 `update_interval` 在有 sensor entity 時是 no-op**。
+
+原因 (見 `climate/taixia_climate.cpp::update()`)：
+```cpp
+void TaiXiaClimate::update() {
+    if (this->parent_->get_version() < 3.0)
+      return this->parent_->read_sa_status();
+    if (!this->parent_->have_sensors())     // ← 有 sensor 就跳過
+      this->parent_->send(6, 0, 0, SERVICE_ID_READ_STATUS, 0xffff);
+    return true;
+}
+```
+
+只要 YAML 有任何 `sensor: - platform: taixia` entry，`have_sensors_` 就會被設成 true，
+climate 的 polling 就不執行。**真正驅動 polling 的是 `AirConditionerSensor::update()`**
+(`sensor/taixia_sensor.cpp:167`)，預設 30 秒。
+
+### 正確設法
+```yaml
+sensor:
+  - platform: taixia
+    type: airconditioner
+    update_interval: 10s     # ← polling 真正的頻率設這裡
+    temperature_indoor: ...
+    ...
+```
+
+建議值: **10~30 秒**。太短 (<5s) UART 跟 Wi-Fi 會打架影響穩定性；太長 (>60s)
+HA 端會看不到即時變化。
+
+---
+
 ## Panasonic 範例 YAML (部分)
 
 完整請參考 ESP32C3-Panasonic-AC.yaml
@@ -120,6 +209,8 @@ climate:
   - platform: taixia
     id: ac_climate
     name: "Climate"
+    # 注意: climate.update_interval 在有 sensor entity 時為 no-op
+    # 真正 polling 間隔請設在下方 `sensor:` 區塊
     update_interval: 10s
     supported_modes:
       - COOL
@@ -157,6 +248,8 @@ number:
 sensor:
   - platform: taixia
     type: airconditioner
+    # ★ 真正的 polling 間隔設這裡 (climate.update_interval 是 no-op)
+    update_interval: 10s
     temperature_indoor:
       name: "Temperature Indoor"
     temperature_outdoor:
@@ -223,14 +316,8 @@ select:
         "6中｜右": 6
         "7右｜右": 7
 
-    # H'1A Panasonic 擴充急速/靜音 — 3-state (0:一般 / 1:急速 / 2:靜音)
-    quick_mode:
-      id: sel_quick_mode
-      name: "[1A] 急速/靜音"
-      options:
-        "0一般": 0
-        "1急速": 1
-        "2靜音": 2
+    # H'1A 急速/靜音 select 已移除 — 詳見上方〈急速 / 靜音〉節說明
+    # 改用 switch.super_mode (BOOST 開關) + text_sensor.boost_mode (狀態反饋)
 
 switch:
   - platform: taixia
@@ -249,6 +336,15 @@ switch:
     # H'08 空氣清淨功能 — Panasonic nanoeX
     air_purifier:
       name: "nanoeX"
+    # H'1A=1 急速 — boolean switch (handle_response 對 0x1A 嚴格 value==1)
+    super_mode:
+      name: "Boost"
+
+text_sensor:
+  - platform: taixia
+    # H'1A 狀態反饋 — 英文 keyword (normal/boost/quiet) 方便 HA 翻譯
+    boost_mode:
+      name: "Boost Mode"
 
 binary_sensor:
   - platform: taixia

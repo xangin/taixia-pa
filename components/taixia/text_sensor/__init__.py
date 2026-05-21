@@ -20,8 +20,10 @@ AUTO_LOAD = ["text_sensor"]
 
 CONF_SA_ID = "sa_id"
 CONF_BRAND = "brand"
+CONF_BOOST_MODE = "boost_mode"
 ICON_MODEL = "mdi:globe-model"
 ICON_BRAND = "mdi:watermark"
+ICON_BOOST = "mdi:speedometer"
 
 TaiXiaTextSensor = taixia_ns.class_("TaiXiaTextSensor", cg.Component)
 
@@ -39,6 +41,8 @@ CONFIG_SCHEMA = cv.Schema({
         icon=ICON_NEW_BOX),
     cv.Optional(CONF_SERVICES): text_sensor.text_sensor_schema(
         icon=ICON_CHIP),
+    cv.Optional(CONF_BOOST_MODE): text_sensor.text_sensor_schema(
+        icon=ICON_BOOST),
 })
 
 async def to_code(config):
