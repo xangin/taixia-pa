@@ -6,6 +6,9 @@ Fork 自 [tsunglung/taixia](https://github.com/tsunglung/taixia)。
 
 本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 慣例 (詳見下方)。
 
+<img src="pictures/pa-ctrl.png" width="50%" />
+<img src="pictures/pa-sensor.png" width="50%" />
+
 ---
 
 ## 改了哪些東西
