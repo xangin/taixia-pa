@@ -1,10 +1,8 @@
 # taixia-pa — ESPHome TaiSEIA 元件 (Panasonic 客製版)
 
-Fork 自 [tsunglung/taixia](https://github.com/tsunglung/taixia)。
+感謝[洋蔥大神](https://github.com/tsunglung/taixia)開發TaiSEIA for ESPhome，才能有此修改版本。
 
-原作者已完成 TaiSEIA 101 協定核心、HomeAssistant整合等基礎建設，感謝原作者貢獻。
-
-本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 慣例 (詳見下方)。
+本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 專用 (詳見下方)。
 
 <img src="pictures/pa-ctrl.png" width="50%" />
 <img src="pictures/pa-sensor.png" width="50%" />
