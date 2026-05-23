@@ -5,6 +5,7 @@ substitutions:
   status_led_pin: GPIO8
   tx_pin: GPIO7 #21 #pin3 (RX to AC)
   rx_pin: GPIO6 #20 #pin4 (TX from AC)
+  led_pin: GPIO8
 
 
 esphome:
@@ -30,6 +31,11 @@ uart:
   tx_pin: $tx_pin
   rx_pin: $rx_pin
   baud_rate: 9600
+
+status_led:
+  pin:
+    number: $led_pin # Blue LED   
+    inverted: True
 
 wifi:
   ssid: !secret wifi_ssid
