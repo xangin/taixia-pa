@@ -2,7 +2,7 @@
 
 感謝[洋蔥大神](https://github.com/tsunglung/taixia)開發TaiSEIA for ESPhome，才能有此修改版本。
 
-本 fork **針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 專用 (詳見下方)。
+本專案**針對 Panasonic 冷氣**做了一些修正與行為調整，部分行為轉成Panasonic 專用 (詳見下方)。
 
 <img src="pictures/pa-ctrl.png" width="50%" />
 <img src="pictures/pa-sensor.png" width="50%" />
@@ -11,29 +11,17 @@
 
 ## 改了哪些東西
 
-### Bug 修正
-- `select` 改值之後 UI 不會立刻更新 (要等下次 polling) — 加上 optimistic
-  publish + 3 秒 command lock，跟既有 switch / climate 相同 pattern。
-- `select` 收到非自己 service_id 的封包時噴 "Invalid value N" warning —
-  改成先過濾自己的 service_id 再查 mapping。
-- preset `NONE` 會 reset ECO / SELF_CLEANING / AIR_PURIFIER —
-  這些功能改為獨立 switch，preset NONE 不再碰它們以免衝突。
-- preset 回讀只反映實際開啟的 BOOST / SLEEP / ACTIVITY，移除
-  ECO / AWAY / COMFORT / HOME 的回讀 (避免設定到不支援的 preset)。
-
-### Schema 強化
-- `select` 的 `options:` 接受 **list 或 dict** 兩種寫法：
-  - **list** (向後相容)：從預設標籤過濾出子集。
-  - **dict** (新)：完全 override 標籤對應的數值，可直接寫中文標籤
-
 ### 新增 entity
-- `select.swing_vertical_level` (H'0F) — Panasonic 只有 level，沒 boolean。
-- `text_sensor.boost_mode` — H'1A 狀態反饋，英文 keyword `normal` / `boost` /
-  `quiet`，方便 HA 多語系翻譯 (詳見下方〈急速/靜音〉節)。
+- `select.swing_vertical_level` — 上下葉片角度調整，加上中文標籤。
+- `select.swing_horizontal_level` — 左右葉片角度調整，加上中文標籤。
+- `select.motion_detect` - 動向感應，加上中文標籤。
+- `text_sensor.boost_mode` — 模式狀態反饋，英文 keyword `normal` / `boost` /
+  `quiet`。
+- `switch.super_mode` - 急速模式開關
 
 ### Panasonic 行為調整
 - **`climate.swing_mode` 改成純反饋**。
-  → 葉片位置請用新的 `select.swing_vertical_level` /
+  → 葉片位置用新的 `select.swing_vertical_level` /
   `select.swing_horizontal_level` 控制。
 - **`select.motion_detect` (H'19) 跟葉片連動** — 詳見下節。
 - **`switch.super_mode` (H'1A=1) 急速模式**
