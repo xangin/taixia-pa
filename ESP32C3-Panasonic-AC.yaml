@@ -3,8 +3,8 @@ substitutions:
   upper_devicename: "Climate-P"
   model_name: "Climate"
   status_led_pin: GPIO8
-  tx_pin: GPIO7 #21 #pin3 (RX to AC)
-  rx_pin: GPIO6 #20 #pin4 (TX from AC)
+  tx_pin: GPIO7 #(RX to AC)
+  rx_pin: GPIO6 #(TX from AC)
   led_pin: GPIO8
 
 
