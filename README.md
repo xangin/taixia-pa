@@ -168,44 +168,46 @@ select:
 
     display_mode:
       id: sel_display_mode
-      name: "面板燈光"
+      name: "[1F] 面板燈光"
       options:
-        "最亮": 0
-        "稍暗": 1
-        "關": 2
+        "0最亮": 0
+        "1稍暗": 1
+        "2稍暗2": 2
 
     motion_detect:
       id: sel_motion_detect
-      name: "動向感應"
+      name: "[19] 動向感應"
       options:
-        "關閉": 0
-        "對人": 1
-        "不對人": 2
-        "自動": 3
+        "0關閉": 0
+        "1對人": 1
+        "2不對人": 2
+        "3自動": 3
 
+    # H'0F 上下擺動段位 — Panasonic 6 段 (0=自動掃, 1~5=固定位置)
     swing_vertical_level:
       id: sel_swing_vert
-      name: "上下擺動位置"
+      name: "[0F] 上下擺動位置"
       options:
-        "自動擺動": 0
+        "0自動擺動": 0
         "1上": 1
         "2中上": 2
         "3中": 3
         "4中下": 4
         "5下": 5
 
+    # H'11 左右擺動段位 — Panasonic 8 段 (0=自動掃, 1~7=固定位置)
     swing_horizontal_level:
       id: sel_swing_horiz
-      name: "左右擺動位置"
+      name: "[11] 左右擺動位置 (左葉片｜右葉片)"
       options:
-        "自動擺動": 0
-        "1中": 1
-        "2右偏左": 2
-        "3左偏右": 3
-        "4最左": 4
-        "5左偏中": 5
-        "6中偏右": 6
-        "7最右": 7
+        "0自動擺動": 0
+        "1中｜中": 1
+        "2右｜左": 2
+        "3左｜右": 3
+        "4左｜左": 4
+        "5左｜中": 5
+        "6中｜右": 6
+        "7右｜右": 7
 
 switch:
   - platform: taixia
